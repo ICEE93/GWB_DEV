@@ -281,6 +281,7 @@ function GWB.Routine:StopRecording()
         #activeSession, #simplified))
 
     local result = simplified
+    loadedSession = result
     activeSession = nil
     lastWaypointPos = nil
 
