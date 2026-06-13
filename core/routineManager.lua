@@ -131,12 +131,15 @@ end
 local recordCallbacks = {}
 
 local function GetInteractObj()
-    local obj = GetNPCObject and GetNPCObject()
-    if not obj or ObjectType(obj) == 0 then
-        obj = PlayerTarget()
-    end
-    if not obj or ObjectType(obj) == 0 then
-        obj = GetMouseover()
+    local obj = nil
+    if Object then
+        obj = Object("npc")
+        if not obj or ObjectType(obj) == 0 then
+            obj = Object("target")
+        end
+        if not obj or ObjectType(obj) == 0 then
+            obj = Object("mouseover")
+        end
     end
     return obj
 end
@@ -158,14 +161,17 @@ recordCallbacks.OnGossipStart = function()
     local npcName = npcObj and ObjectName(npcObj) or "Unknown"
     -- capture gossip options at this moment
     C_Timer.After(0.3, function()
-        local gossipOpts = CaptureGossipState()
-        AddStep("npc_interact", {
-            npcId      = npcId,
-            npcName    = npcName,
-            x = px, y = py, z = pz,
-            mapId      = mapId,
-            gossipOpts = gossipOpts,
-        })
+        local ok, err = pcall(function()
+            local gossipOpts = CaptureGossipState()
+            AddStep("npc_interact", {
+                npcId      = npcId,
+                npcName    = npcName,
+                x = px, y = py, z = pz,
+                mapId      = mapId,
+                gossipOpts = gossipOpts,
+            })
+        end)
+        if not ok then GWB:Print("OnGossipStart Timer Error: " .. tostring(err)) end
     end)
 end
 
@@ -313,7 +319,7 @@ end
 
 function GWB.Routine:SaveToDisk(name, steps)
     name  = name or sessionName or "unnamed"
-    steps = steps or activeSession or {}
+    steps = steps or activeSession or loadedSession or {}
 
     local simplified = SimplifyWaypoints(steps)
     local payload = {
@@ -404,7 +410,8 @@ if origFireCallback then
         if GWB._routineRecordCallbacks then
             local hook = GWB._routineRecordCallbacks[cbName]
             if hook then
-                pcall(hook, ...)
+                local ok, err = pcall(hook, ...)
+                if not ok then GWB:Print("Recorder Hook Error: " .. tostring(err)) end
             end
         end
         return origFireCallback(self, cbName, ...)
