@@ -848,7 +848,6 @@ local function DumpTrainerServices()
                 tostring(isAvailable)
             )
         )
-        )
     end
 end
 

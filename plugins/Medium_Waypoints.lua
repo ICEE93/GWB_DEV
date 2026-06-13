@@ -351,7 +351,7 @@ function _tickTest()
     end
 
     --print(d, "distance on waypoint")
-    local minDist = 5
+    local minDist = 7
     if useMount then
         minDist = 8
     end

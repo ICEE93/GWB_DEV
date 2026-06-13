@@ -38,6 +38,52 @@ local function UpdateQuestCache()
     end
 end
 
+local function IsQuestieObjectiveFast(obj)
+    if not Questie or not QuestiePlayer or type(QuestiePlayer.currentQuestlog) ~= "table" then return false end
+    
+    local typeId = ObjectType(obj)
+    local objId = typeId == 5 and ObjectUnitId(obj) or ObjectId(obj)
+    if not objId then return false end
+    
+    for questId, quest in pairs(QuestiePlayer.currentQuestlog) do
+        if type(quest) == "table" and not quest.isComplete then
+            if type(quest.Objectives) == "table" then
+                for _, objective in pairs(quest.Objectives) do
+                    if type(objective) == "table" and not objective.Completed then
+                        -- direct monster/object match
+                        if (objective.Type == "monster" and typeId == 5 and objective.Id == objId) or
+                           (objective.Type == "object" and typeId == 8 and objective.Id == objId) then
+                            return true, quest.name or tostring(questId)
+                        end
+                        
+                        -- item drop check via QuestieDB
+                        if objective.Type == "item" and typeId == 5 and QuestieDB then
+                            local dropMatched = false
+                            if QuestieDB.QueryItemSingle then
+                                local itemDrops = QuestieDB.QueryItemSingle(objective.Id, "npcDrops")
+                                if type(itemDrops) == "table" then
+                                    for dropNpcId, _ in pairs(itemDrops) do
+                                        if dropNpcId == objId then dropMatched = true; break end
+                                    end
+                                end
+                            elseif QuestieDB.QueryItem then
+                                local itemData = QuestieDB.QueryItem(objective.Id)
+                                if type(itemData) == "table" and type(itemData[3]) == "table" then
+                                    for dropNpcId, _ in pairs(itemData[3]) do
+                                        if dropNpcId == objId then dropMatched = true; break end
+                                    end
+                                end
+                            end
+                            if dropMatched then return true, quest.name or tostring(questId) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Scans nearby units/objects to see if their tooltip matches an active objective
 local function ScanNearbyObjectives()
     -- Only scan if the bot is actually running
@@ -96,26 +142,33 @@ local function ScanNearbyObjectives()
                     local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
                     
                     if dist <= SEARCH_RADIUS then
-                        -- Check tooltip
-                        Nn.SetMouseover(obj)
-                        
-                        -- In Classic, GameTooltipTextLeftX holds the lines
+                        local isQuestieObj, questName = IsQuestieObjectiveFast(obj)
                         local matchFound = false
-                        for lineNum = 1, 6 do
-                            local fontString = _G["GameTooltipTextLeft" .. lineNum]
-                            if fontString and fontString.GetText then
-                                local text = fontString:GetText()
-                                if text then
-                                    -- See if this tooltip line matches any active objective
-                                    if activeObjectives[text] then
-                                        matchFound = true
-                                        break
-                                    end
-                                    
-                                    -- Fallback check for standard Classic objective format e.g. " 0/8"
-                                    if string.find(text, "%d+/%d+") then
-                                        matchFound = true
-                                        break
+                        
+                        if isQuestieObj then
+                            matchFound = true
+                            GWB:Print("[Questie] Found objective for: " .. tostring(questName))
+                        else
+                            -- Fallback to Tooltip Check
+                            Nn.SetMouseover(obj)
+                            
+                            -- In Classic, GameTooltipTextLeftX holds the lines
+                            for lineNum = 1, 6 do
+                                local fontString = _G["GameTooltipTextLeft" .. lineNum]
+                                if fontString and fontString.GetText then
+                                    local text = fontString:GetText()
+                                    if text then
+                                        -- See if this tooltip line matches any active objective
+                                        if activeObjectives[text] then
+                                            matchFound = true
+                                            break
+                                        end
+                                        
+                                        -- Fallback check for standard Classic objective format e.g. " 0/8"
+                                        if string.find(text, "%d+/%d+") then
+                                            matchFound = true
+                                            break
+                                        end
                                     end
                                 end
                             end

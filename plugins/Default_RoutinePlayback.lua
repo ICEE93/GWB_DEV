@@ -217,6 +217,19 @@ local function ExecQuestAccept(step)
     -- (i.e. previous npc_interact triggered it). If not, find the NPC again.
     if QuestFrame and QuestFrame:IsShown() then
         Nn.Unlock(AcceptQuest)
+    elseif GossipFrame and GossipFrame:IsShown() then
+        local numQuests = GetNumGossipAvailableQuests()
+        if numQuests > 0 then
+            -- For now, just select the first available quest, 
+            -- or we could iterate {GetGossipAvailableQuests()} to match step.questName.
+            -- Selecting the first one is the safest generic fallback.
+            if Nn.Unlock then
+                Nn.Unlock(SelectGossipAvailableQuest, 1)
+            else
+                SelectGossipAvailableQuest(1)
+            end
+            return
+        end
     else
         -- Walk to the NPC coords
         if InteractClosestNpc(step) then return end
@@ -238,6 +251,16 @@ local function ExecQuestTurnin(step)
             Nn.Unlock(QuestFrameCompleteButton.Click, QuestFrameCompleteButton)
         elseif QuestFrameCompleteQuestButton and QuestFrameCompleteQuestButton:IsShown() then
             Nn.Unlock(QuestFrameCompleteQuestButton.Click, QuestFrameCompleteQuestButton)
+        end
+    elseif GossipFrame and GossipFrame:IsShown() then
+        local numQuests = GetNumGossipActiveQuests()
+        if numQuests > 0 then
+            if Nn.Unlock then
+                Nn.Unlock(SelectGossipActiveQuest, 1)
+            else
+                SelectGossipActiveQuest(1)
+            end
+            return
         end
     else
         if InteractClosestNpc(step) then return end
