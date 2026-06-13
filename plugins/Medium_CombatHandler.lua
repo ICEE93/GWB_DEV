@@ -92,7 +92,12 @@ GWB.isPostCombatLooting = false
 
 local function IgnoreCombatInCurrentState()
     local state = GWB.State:getCurrentState()
-    if state == "plugin.TownHandler" then return true end
+    if state == "plugin.TownHandler" then 
+        local avgPct, lowestPct, lowestSlot = GWB.Inv:GetAverageDurability()
+        if avgPct < 10 or lowestPct < 5 then
+            return true
+        end
+    end
 
     return false
 end
@@ -114,7 +119,10 @@ end
 
 -- Combat ticker for movement/facing
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
-    --if IgnoreCombatInCurrentState() then return end
+    if IgnoreCombatInCurrentState() then 
+        GWB:Print("CombatHandler ignoring combat (fleeing).")
+        return false 
+    end
     if GWB.Settings.UseEZNavSafe then
         if GWB.EZMover:IsMoving() then
             GWB:Print("CH enter combat, force stop mov")
@@ -131,8 +139,8 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     combatStarted = GetTime()
     postCombatStarted = 0
     GWB:TickerSetState(tickerNameCombat, true)
-    --GWB:TickerSetState(tickerNamePostCombat, false)
-    return false
+    GWB:TickerSetState(tickerNameCombat, true)
+    return true -- block others
 end
 
 -- post-combat for loot?
@@ -142,16 +150,12 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
 
     GWB:Print("OnPlayerLeaveCombat CH")
     combatStarted = 0
-    postCombatStarted = GetTime()
-    print("postCombatStarted", postCombatStarted)
-    GWB:TickerSetState(tickerNameCombat, false)
-    GWB:TickerSetState(tickerNamePostCombat, true)
-    GWB.isPostCombatLooting = true
     
     -- Clear target so waypoint ticker doesn't fight us
     if UnitIsDead("target") then
-        Unlock(ClearTarget)
-        ClearTarget()
+        if Unlock and RunMacroText then
+            Unlock(RunMacroText, "/cleartarget")
+        end
     end
     
     -- leave state
@@ -159,75 +163,14 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
         GWB.State:returnState()
     end
 
-    return true -- yes block it?
-end
-
--- TODO: MOVE THIS INTO A POST-COMBAT HELPER!!! 
--- WE CONFLICT WITH RESTING HANDLER ON THIS ONE!
---
--- to know when to disable post-combat 
-plugin.callbacks.OnLootFinished = function(ctx)
-    GWB:Debug("CombatHandler, OnLootFinished")
-    GWB:TickerSetState(tickerNamePostCombat, false)
-    GWB.isPostCombatLooting = false
-
-    local delay = plugin.settings.cb_delay_after_loot.value
-    C_Timer.After(delay, function()
-        GWB:Debug("CombatHandler, OnLootFinished resuming CombatLeave")
-        -- unset loot object 
-        lastLootingCorpse = nil
-        
-        -- only dispatch if needed?
-        if previousCtx then
-            local ctx = previousCtx
-            previousCtx = nil
-            
-            -- leave state
-            if GWB.State:getCurrentState() == "plugin.CombatHandler" then
-                GWB.State:returnState()
-            end
-            
-            ctx.continue() -- by doing so, the MovementHandler should pick up and continue?
-        end
-    end)
-
-    return false -- never consume
-end
-
-plugin.callbacks.OnLootStarted = function(ctx, autoloot)
-    -- max 1 extra second delay now that we have loot window open
-    local timeoutSeconds = plugin.settings.cb_post_timeout.value
-    postCombatStarted = GetTime() - (timeoutSeconds + 1.5)
-    if autoloot then return false end
-    
-    -- force loot items?
-    if LootFrame == nil or not LootFrame:IsVisible() then return false end
-
-    --LootFrame
-    local numLoot = GetNumLootItems and GetNumLootItems() or 5
-    for i=1, numLoot do 
-        C_Timer.After(0.5 + (i/10), function() Unlock(LootSlot, i) end)-- eh?
-    end
-
-    return false
+    return false -- let event propagate to LootHandler and RestHandler
 end
 
 plugin.callbacks.OnMovementFinished = function(ctx, type, ...)
     -- we have no skin in the game?
     
-    if lastLootingCorpse == nil then return false end
-
     if type == "object" then
-        local targetObject = ...
-        if targetObject == lastLootingCorpse then
-            -- Just loot it!
-            GWB:Debug("CombatHandler, OnMovementFinished true!")
-            ObjectInteract(lastLootingCorpse)
-            C_Timer.After(0.5, function() --[[print("Looting...")]] ObjectInteract(lastLootingCorpse) end)
-            -- TODO: verify if loot was gained tho?
-            GWB:Debug("CombatHandler, OnMovementFinished")
-            return true -- mi mi mi mi mi :3
-        end
+        --
     elseif type == "xyz" then
         --local x, y, z = {...}
     end
@@ -347,121 +290,6 @@ local function tickCombat()
 
 end
 
--- post-combat looting and whatnot?
-local function tickPostCombat()
-    -- at one point, it gotta take itself out!
-    local timeoutSeconds = plugin.settings.cb_post_timeout.value
-
-    -- Keep target clear during looting so waypoint ticker doesn't fight us
-    if UnitExists("target") and not UnitIsDead("target") and UnitCanAttack("player", "target") then
-        Unlock(ClearTarget)
-        ClearTarget()
-    end
-
-    if lastLootingCorpse ~= nil then
-        -- Check if corpse is still valid and lootable
-        if not ObjectExists(lastLootingCorpse) or (ObjectLootable and not ObjectLootable(lastLootingCorpse)) then
-            lastLootingCorpse = nil
-        else
-            -- Try to interact directly if close enough
-            local px, py, pz = ObjectPosition("player")
-            local cx, cy, cz = ObjectPosition(lastLootingCorpse)
-            if px and cx then
-                local dx, dy, dz = cx-px, cy-py, cz-pz
-                local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                if dist < 5.0 then
-                    -- Must stop ClickToMove before ObjectInteract will work
-                    ClickToMove(px, py, pz)
-                    ObjectInteract(lastLootingCorpse)
-                end
-            end
-        end
-    end
-
-    -- find a corpse if we aren't alrdy looking at one?
-    if lastLootingCorpse == nil then
-        -- try looting?
-        local corpses = GWB.OM:GetNearbyLootableCorpses()
-        if #corpses == 0 then
-            GWB:Debug("No loot? returning!")
-            lastLootingCorpse = nil
-
-            GWB:Debug("CombatHandler, OnLootFinished")
-            GWB:TickerSetState(tickerNamePostCombat, false)
-            GWB.isPostCombatLooting = false
-            
-            -- only dispatch if needed?
-            if previousCtx then
-                local ctx = previousCtx
-                previousCtx = nil
-
-                -- leave state
-                if GWB.State:getCurrentState() == "plugin.CombatHandler" then
-                    GWB.State:returnState()
-                end
-
-                ctx.continue() -- by doing so, the MovementHandler should pick up and continue?
-            end
-        else
-            GWB:Debug("There is ", #corpses, "corpses nearby")
-        
-            -- take the closest corpse?
-            local px, py, pz = ObjectPosition("player")
-            if not px then return end
-            local nearbyCorpses = GWB.Utils:GetClosestObject(corpses, px, py, pz)
-            
-            -- If already close enough, just interact directly
-            local cx, cy, cz = ObjectPosition(nearbyCorpses)
-            if cx then
-                local dx, dy, dz = cx-px, cy-py, cz-pz
-                local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                if dist < 5.0 then
-                    lastLootingCorpse = nearbyCorpses
-                    -- Must stop ClickToMove before ObjectInteract will work
-                    ClickToMove(px, py, pz)
-                    ObjectInteract(nearbyCorpses)
-                    GWB:Debug("Direct interact with corpse at dist:", dist)
-                    return
-                end
-            end
-            
-            local isMoveOk = false
-            if GWB.Settings.UseEZNavSafe then
-                isMoveOk = GWB.EZMover:MoveToObject(nearbyCorpses)
-            else
-                isMoveOk = GWB.Mover:MoveToObject(nearbyCorpses)
-            end
-            if isMoveOk then
-                lastLootingCorpse = nearbyCorpses
-            end
-            GWB:Debug("Setting movement to corpse! from CombatHandler, isMoveOk:", isMoveOk)
-        end
-    end
-
-    --GWB:Debug("tickPostCombat", GetTime(), ">", postCombatStarted+timeoutSeconds)
-
-    local finishedLooting = GetTime() > postCombatStarted + timeoutSeconds
-
-    if finishedLooting then
-        GWB:Debug("tickPostCombat timed-out!")
-        GWB:TickerSetState(tickerNamePostCombat, false)
-        GWB.isPostCombatLooting = false
-        lastLootingCorpse = nil
-        -- now dispatch the "LeaveCombat fr"
-        if previousCtx then
-            local ctx = previousCtx
-            previousCtx = nil
-            
-            -- leave state
-            if GWB.State:getCurrentState() == "plugin.CombatHandler" then
-                GWB.State:returnState()
-            end
-
-            ctx.continue() -- by doing so, the MovementHandler should pick up and continue?
-        end
-    end
-end
-
 plugin.handlers.tickCombat = function()
     if IgnoreCombatInCurrentState("player") then
         print("SKIP COMBAT")
@@ -485,5 +313,6 @@ plugin.handlers.stateTick = function()
 end
 
 GWB:RegisterTicker(tickerNameCombat, tickCombat)
-GWB:RegisterTicker(tickerNamePostCombat, tickPostCombat)
+GWB:TickerSetState(tickerNameCombat, false)
+
 GWB:RegisterPlugin(plugin)

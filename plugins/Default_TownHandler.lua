@@ -625,7 +625,7 @@ local function IsGoodsFinished()
     
     -- TODO: calc food tier prices??
     if not CanAffordConsumables() then 
-        print("CanNotAfford consumabled!!")
+        GWB:Debug("Cannot afford consumables, skipping goods.")
         return true 
     end 
 
@@ -710,15 +710,17 @@ function IsVendorItemBlacklisted(itemID, arg1)
     return set[itemID] == true
 end
 
-local function ShouldVendor(itemID)
+local function ShouldVendor(itemID, quality)
     -- exclude food/drink ofc!
     if IsVendorItemBlacklisted(itemID, GWB.DB.classic.drinks) then return false end
     if IsVendorItemBlacklisted(itemID, GWB.DB.classic.food) then return false end
+
+    -- Always sell poor (grey) items regardless of if we looted them
+    if quality == 0 then return true end
+
     local count = GWB.Inv.currentItems[tostring(itemID)]
     if count == nil then return false end
-    --return count > 0
-    return true -- for some reason some are 0 ????
-    -- TODO: fix the inv handler, if its listed try sell ALL
+    return true -- Sell all of it if it was collected by us
 end
 
 local function EnqueueVendorItems()
@@ -729,8 +731,7 @@ local function EnqueueVendorItems()
         for slot = 1, slots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.itemID and not info.isLocked then
-                --print("ShouldVendor", info.itemID, ShouldVendor(info.itemID))
-                if ShouldVendor(info.itemID) then
+                if ShouldVendor(info.itemID, info.quality) then
                     sellQueue[#sellQueue + 1] = {bag = bag, slot = slot, count = info.stackCount or 1}
                 end
             end
@@ -1024,7 +1025,7 @@ plugin.handlers.stateTick = function()
     --    return true -- true means we "resume" to the "previous" state
     if not repairChecked then
         if not tick_repair() then
-            --return -- wait for it to update state from above, or to just fail?
+            return -- wait for it to update state from above, or to just fail?
         else
             repairChecked = true -- we failed, just continue
         end
@@ -1045,7 +1046,7 @@ plugin.handlers.stateTick = function()
 
     if not vendorChecked then
         if not tick_vendor() then
-            --return
+            return
         else
             vendorChecked = true
         end
@@ -1067,7 +1068,7 @@ plugin.handlers.stateTick = function()
 
     if not goodsChecked then
         if not tick_goods() then
-            --return
+            return
         else
             goodsChecked = true
         end
@@ -1088,7 +1089,7 @@ plugin.handlers.stateTick = function()
 
     if not trainerChecked then
         if not tick_trainer() then
-            --return
+            return
         else
             trainerChecked = true
         end
@@ -1264,18 +1265,23 @@ plugin.callbacks.OnMovementFinished = function(ctx, type, tx, ty, tz)
 
     local npcs = GWB.OM:FindNPCsById(nearbyRepair.id)
 
-    -- just click all? xD
+    -- Use InteractOrApproach to ensure we are actually close enough
     for i=1, #npcs do
-        ObjectInteract(npcs[i])
+        GWB.Utils:InteractOrApproach(npcs[i], function(obj)
+            ObjectInteract(obj)
+        end, 4.5)
     end
     
     return
 end
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
-    -- TODO: fix BUGFIX the combat rotation handler, we want to flee?
-    -- maybe check if mounted idk
-    -- hmm.. just dispatch back to where we came from??
     if GWB.State:getCurrentState() == "plugin.TownHandler" then
+        local avgPct, lowestPct, lowestSlot = GWB.Inv:GetAverageDurability()
+        if avgPct < 10 or lowestPct < 5 then
+            GWB:Print("TownHandler ignoring combat, fleeing to vendor!")
+            return true -- suppress other handlers, keep moving
+        end
+
         print("RETURN FROM TownHandler ???")
         GWB.State:returnState()
     end

@@ -10,12 +10,64 @@ local GetContainerItemInfo = GetContainerItemInfo or C_Container.GetContainerIte
 local UseContainerItem = UseContainerItem or C_Container.UseContainerItem
 local GetContainerItemCooldown = GetContainerItemCooldown or C_Container.GetContainerItemCooldown
 
--- TODO: figure out level, parse inventory and get best food?
-function GWB.Inv:FindUsableDrink()
-    return {}
+local function FindItemLocation(itemId)
+    local GetContainerItemID = GetContainerItemID or C_Container.GetContainerItemID
+    local GetContainerNumSlots = GetContainerNumSlots or C_Container.GetContainerNumSlots
+
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local idInSlot = GetContainerItemID(bag, slot)
+            if idInSlot == itemId then
+                return bag, slot
+            end
+        end
+    end
+    return nil, nil
 end
+
+function GWB.Inv:GetBestConsumable(consumables)
+    local itemIds = GWB.Inv.currentItems
+    if not itemIds or not consumables then return nil end
+
+    local lvl = UnitLevel("player")
+    if not lvl or lvl <= 0 then return nil end
+
+    local maxReq = 0
+    for reqLevel, _ in pairs(consumables) do
+        if reqLevel > maxReq then maxReq = reqLevel end
+    end
+    
+    local function GetCount(itemId)
+        return itemIds[tostring(itemId)] or 0
+    end
+    
+    for req = maxReq, 1, -1 do
+        if req <= lvl then
+            local foodsAtReq = consumables[req]
+            if foodsAtReq then
+                for j = 1, #foodsAtReq do
+                    local itemId = foodsAtReq[j]
+                    local count = GetCount(itemId)
+                    if count > 0 then
+                        local bag, slot = FindItemLocation(itemId)
+                        if bag then
+                            return itemId, bag, slot, req, count
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function GWB.Inv:FindUsableDrink()
+    return GWB.Inv:GetBestConsumable(GWB.DB.classic.drinks)
+end
+
 function GWB.Inv:FindUsableFood() 
-    return {}
+    return GWB.Inv:GetBestConsumable(GWB.DB.classic.food_normal)
 end
 
 -- Function to search for a specific item in the player's bags
@@ -60,13 +112,50 @@ end
 function GWB.Inv:HasHearthstone()
     local itemId = 6948
     local toybox = { } -- TODO: also check for expac?
-    local _, bag, slot = GWB.Inv:FindItemInBags(itemId)
-    
-    if bag == nil then return false end
-
-    local _, _, cooldown = GetContainerItemCooldown(bag, slot)
-    return coodlown == false
+    local count, bag, slot = GWB.Inv:FindItemInBags(itemId)
+    return bag ~= nil
 end
+
+local DURABILITY_SLOTS = {
+    "HeadSlot", "ShoulderSlot", "ChestSlot", "WristSlot", "HandsSlot",
+    "WaistSlot", "LegsSlot", "FeetSlot",
+    "MainHandSlot", "SecondaryHandSlot", "RangedSlot"
+}
+local SLOT_NAME_TO_ID = {
+    HeadSlot = 1, ShoulderSlot = 3, ChestSlot = 5, WristSlot = 9,
+    HandsSlot = 10, WaistSlot = 6, LegsSlot = 7, FeetSlot = 8,
+    MainHandSlot = 16, SecondaryHandSlot = 17, RangedSlot = 18,
+}
+local function SafeGetSlotId(slotName)
+    local ok, slotId = pcall(GetInventorySlotInfo, slotName)
+    if ok and slotId then return slotId end
+    return SLOT_NAME_TO_ID[slotName]
+end
+
+function GWB.Inv:GetAverageDurability()
+    local totalCur, totalMax = 0, 0
+    local lowestPct, lowestSlot = 101, nil
+
+    for _, slotName in ipairs(DURABILITY_SLOTS) do
+        local slotId = SafeGetSlotId(slotName)
+        if slotId then
+            local cur, max = GetInventoryItemDurability(slotId)
+            if cur and max and max > 0 then
+                totalCur = totalCur + cur
+                totalMax = totalMax + max
+
+                local pct = (cur / max) * 100
+                if pct < lowestPct then
+                    lowestPct = pct
+                    lowestSlot = slotName
+                end
+            end
+        end
+    end
+    local avgPct = (totalMax > 0) and (totalCur / totalMax) * 100 or 100
+    return avgPct, lowestPct, lowestSlot
+end
+
 function GWB.Inv:UseHearthstone()
     local itemId = 6948
     local toybox = { } -- TODO: also check for expac?
@@ -123,10 +212,10 @@ function GWB.Inv:Tick()
 end
 
 -- TODO: Register events to keep track of loot?
-LootLog = {}
+GWB.Inv.LootLog = GWB.Inv.LootLog or {}
  
 local f = CreateFrame("Frame")
-f:RegisterEvent("BAG_UPDATE") -- TODO; callback?
+f:RegisterEvent("BAG_UPDATE")
 
 GWB.Inv.currentItems = {}
 GWB.Inv.isInitialized = false
@@ -189,9 +278,16 @@ function GWB.Inv:TickBagUpdate()
                     --print("new collected", newCollected, item, "   = ", count, "  - ", current)
                     -- NOTE; newCollected cold be negative too?
 
-                    --if collectedList[itemID] == nil or newCollected ~= collectedList[itemID] then
                     if collectedList[itemID] == nil or newCollected ~= collectedList[itemID] then
-                        print("set ", tostring(newCollected) .. " for ", item)
+                        local diff = newCollected - (collectedList[itemID] or 0)
+                        if diff > 0 then
+                            print("Looted: ", tostring(diff) .. "x ", item)
+                            table.insert(GWB.Inv.LootLog, { time = GetTime(), itemID = itemID, link = item, count = diff })
+                            if GWB.FireCallback then
+                                GWB:FireCallback("OnItemLooted", itemID, item, diff)
+                            end
+                        end
+                        
                         collectedList[itemID] = newCollected
                         needSave = true
                     end

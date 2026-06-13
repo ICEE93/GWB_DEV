@@ -405,3 +405,76 @@ function GWB:IsRangeSpec()
 end
 
 -- is lootable?
+
+-- ---------------------------------------------------------------------------
+-- Interaction Distance Guards
+-- ---------------------------------------------------------------------------
+
+-- Returns true if the player is within melee/interact range of a world object.
+-- maxRange defaults to 4.5 yards (safe server-side interact range).
+function GWB.Utils:IsInInteractRange(obj, maxRange)
+    maxRange = maxRange or 4.5
+    if not obj or not ObjectExists(obj) then return false end
+    local px, py, pz = ObjectPosition("player")
+    local ox, oy, oz = ObjectPosition(obj)
+    if not px or not ox then return false end
+    local dist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+    return dist <= maxRange
+end
+
+-- Attempts to interact with obj.  If the player is out of range, it
+-- navigates closer first, then fires callback(obj) once in range.
+-- Returns "ok" if already in range, "moving" if navigating, "fail" if obj invalid.
+function GWB.Utils:InteractOrApproach(obj, onReachCallback, maxRange)
+    maxRange = maxRange or 4.5
+    if not obj or not ObjectExists(obj) then return "fail" end
+
+    if GWB.Utils:IsInInteractRange(obj, maxRange) then
+        -- Already close enough — stop movement and interact
+        local px, py, pz = ObjectPosition("player")
+        if px then ClickToMove(px, py, pz) end
+        if onReachCallback then
+            C_Timer.After(0.3, function()
+                if ObjectExists(obj) then
+                    onReachCallback(obj)
+                end
+            end)
+        end
+        return "ok"
+    end
+
+    -- Need to get closer — navigate to the object
+    GWB:Debug("Utils:InteractOrApproach — navigating closer to", ObjectName(obj))
+    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+        GWB.EZMover:MoveToObject(obj)
+    else
+        GWB.Mover:MoveToObject(obj)
+    end
+
+    -- Poll until we're in range (with a 15-second timeout)
+    local deadline = GetTime() + 15
+    local pollName = "InteractOrApproach_" .. tostring(ObjectPointer and ObjectPointer(obj) or math.random(1e6))
+    local ticker
+    ticker = C_Timer.NewTicker(0.3, function()
+        if GetTime() > deadline then
+            GWB:Debug("Utils:InteractOrApproach timed out on", ObjectName(obj))
+            if ticker then ticker:Cancel() end
+            return
+        end
+        if not ObjectExists(obj) then
+            if ticker then ticker:Cancel() end
+            return
+        end
+        if GWB.Utils:IsInInteractRange(obj, maxRange) then
+            if ticker then ticker:Cancel() end
+            local px, py, pz = ObjectPosition("player")
+            if px then ClickToMove(px, py, pz) end
+            C_Timer.After(0.3, function()
+                if ObjectExists(obj) and onReachCallback then
+                    onReachCallback(obj)
+                end
+            end)
+        end
+    end)
+    return "moving"
+end

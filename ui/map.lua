@@ -121,8 +121,10 @@ local function RedrawMapDots()
     print(string.format("%d dots for mapId %d", #points, currentMapID))
 
     for i, point in ipairs(points) do
-        DrawDot(point.x, point.y)
-        if i > 1 then
+        if point.x and point.y then
+            DrawDot(point.x, point.y)
+        end
+        if i > 1 and points[i-1].x and points[i-1].y and point.x and point.y then
             DrawLine(points[i-1].x, points[i-1].y, point.x, point.y)
         end
     end
@@ -252,8 +254,10 @@ function GWB:OnBotScanTick(losCheck)
         SetMouseover(o)
         local t = ObjectType(o)
         if t == 5 then -- NPCs
-            --print("found NPC", ObjectName(o), "==", UnitCanAttack("player", "mouseover"))
-            local _, ctype = UnitCreatureType("mouseover")
+            local ptr = ObjectPointer(o)
+            if not GWB.BlacklistedTargets or not GWB.BlacklistedTargets[ptr] or GWB.BlacklistedTargets[ptr] < GetTime() then
+                --print("found NPC", ObjectName(o), "==", UnitCanAttack("player", "mouseover"))
+                local _, ctype = UnitCreatureType("mouseover")
             if 
               not UnitIsDeadOrGhost("mouseover") and 
               UnitCanAttack("player", "mouseover") and
@@ -280,6 +284,7 @@ function GWB:OnBotScanTick(losCheck)
                         end
                     end
                 end
+            end
             end
         end
     end
@@ -376,6 +381,17 @@ local function InitializeUI()
     end)
     btnStartToggle:SetFrameLevel(10)
 
+    local btnRecorder = CreateMapButton("GWBRecorderButton", "Recorder", 10, -80, function()
+        if GWB.ToggleRecorderUI then GWB:ToggleRecorderUI() end
+    end)
+    btnRecorder:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Open Routine Recorder", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    btnRecorder:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
+    btnRecorder:SetFrameLevel(10)
+
     -- Create Minimap Button
     local minimapBtn = CreateFrame("Button", "GWBMinimapButton", Minimap)
     minimapBtn:SetSize(31, 31)
@@ -393,7 +409,7 @@ local function InitializeUI()
     border:SetSize(54, 54)
     border:SetPoint("TOPLEFT", minimapBtn, "TOPLEFT", 0, 0)
 
-    minimapBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    minimapBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
     minimapBtn:SetScript("OnClick", function(self, button)
         if button == "LeftButton" then
             OnStartStopToggle()
@@ -403,14 +419,21 @@ local function InitializeUI()
             else
                 print("GWB Config UI not loaded!")
             end
+        elseif button == "MiddleButton" then
+            if GWB.ToggleRecorderUI then
+                GWB:ToggleRecorderUI()
+            end
         end
     end)
     minimapBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        if GWB.Map:IsRunning() then
-            GameTooltip:SetText("GWB: Running\nLeft-Click to Stop\nRight-Click for Settings", 0, 1, 0)
+        local isRec = GWB.Routine and GWB.Routine:IsRecording()
+        local recText = isRec and "\n|cffff0000[RECORDING]|r" or ""
+        
+        if GWB.Map:IsRunning() or (GWB.RoutinePlayback and GWB.RoutinePlayback:IsRunning()) then
+            GameTooltip:SetText("GWB: Running" .. recText .. "\nLeft-Click to Stop\nRight-Click for Settings\nMiddle-Click for Recorder", 0, 1, 0)
         else
-            GameTooltip:SetText("GWB: Stopped\nLeft-Click to Start\nRight-Click for Settings", 1, 0, 0)
+            GameTooltip:SetText("GWB: Stopped" .. recText .. "\nLeft-Click to Start\nRight-Click for Settings\nMiddle-Click for Recorder", 1, 0, 0)
         end
         GameTooltip:Show()
     end)

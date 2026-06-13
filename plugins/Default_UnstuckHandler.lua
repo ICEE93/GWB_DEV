@@ -39,15 +39,22 @@ end
 
 ]]
 
--- TODO: COPY MOV STATE SO WE CAN 'REPLAY' AFTER COMBAT!
 local continueMovAfterCombat = false
 
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     -- stop movement!
-    if GWB.Mover:IsMoving() then
-        GWB:Print("EnterCombat, pause active mover")
-        GWB.Mover:HaltMovement()
-        continueMovAfterCombat = true
+    if GWB.Settings.UseEZNavSafe then
+        if GWB.EZMover:IsMoving() then
+            GWB:Print("EnterCombat, pause active EZMover")
+            GWB.EZMover:Stop()
+            continueMovAfterCombat = true
+        end
+    else
+        if GWB.Mover:IsMoving() then
+            GWB:Print("EnterCombat, pause active mover")
+            GWB.Mover:HaltMovement()
+            continueMovAfterCombat = true
+        end
     end
 
     return false -- let it rip!
@@ -56,7 +63,11 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     -- stop movement!
     if continueMovAfterCombat then
         GWB:Print("LeaveCombat, resume mover")
-        GWB.Mover:StartMove() -- continue where left off?
+        if GWB.Settings.UseEZNavSafe then
+            if GWB.EZMover.StartMove then GWB.EZMover:StartMove() end
+        else
+            GWB.Mover:StartMove() -- continue where left off?
+        end
         continueMovAfterCombat = false
     end
     

@@ -59,6 +59,8 @@ GWB:Require(filePath .. "ui/settings.lua")
 
 GWB:Require(filePath .. "core/inventoryManager.lua")
 GWB:Require(filePath .. "core/stateManager.lua")
+GWB:Require(filePath .. "core/routineManager.lua")
+GWB:Require(filePath .. "ui/recorder.lua")
 
 -- Classic Data
 GWB:Require(filePath .. "database/classic/data.lua")

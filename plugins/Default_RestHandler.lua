@@ -60,86 +60,11 @@ plugin.cb_priority = GWB.enums.cb_priority.DEFAULT
 plugin.callbacks = {}
 plugin.handlers = {}
 
--- helper to locate an item in bags
-local function FindItemLocation(itemId)
-    local GetContainerItemID = GetContainerItemID or C_Container.GetContainerItemID
-    local GetContainerNumSlots = GetContainerNumSlots or C_Container.GetContainerNumSlots
 
-    for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = GetContainerNumSlots(bag)
-
-        for slot = 1, numSlots do
-            local idInSlot = GetContainerItemID(bag, slot)
-            if idInSlot == itemId then
-                return bag, slot
-            end
-        end
-    end
-    return nil, nil
-end
-
-local function FindBestConsumableInBags(consumables)
-    local itemIds = GWB.Inv.currentItems
-
-    if not itemIds or not consumables then return nil end
-
-    -- quick lookup set for inventory itemIDs
-    --[[
-    local invSet = {}
-    for i = 1, #itemIds do
-        local id = itemIds[i]
-        if id then invSet[id] = true end
-    end]]
-
-    local lvl = UnitLevel("player") -- player level :contentReference[oaicite:1]{index=1}
-    if not lvl or lvl <= 0 then return nil end
-
-    -- find highest required level in food table
-    local maxReq = 0
-    for reqLevel, _ in pairs(consumables) do
-        --print(reqLevel, maxReq)
-        if reqLevel > maxReq then maxReq = reqLevel end
-    end
-    
-    local function GetCount(itemId)
-        return itemIds[tostring(itemId)] or 0
-    end
-    
-    -- walk down from best food to worst
-    for req = maxReq, 1, -1 do
-        if req <= lvl then
-            local foodsAtReq = consumables[req]
-            --print(req, foodsAtReq)
-            if foodsAtReq then
-                for j = 1, #foodsAtReq do
-                    local itemId = foodsAtReq[j]
-                    --print("checking", itemId)
-                    local count = GetCount(itemId)
-
-                    if count > 0 then
-                        local bag, slot = FindItemLocation(itemId)
-                        if bag then
-                            return itemId, bag, slot, req, count
-                        end
-                        -- if count says yes but bag scan fails, keep searching
-                    end
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-local function FindBestConsumableInBags_()
-    return FindBestConsumableInBags(GWB.DB.classic.drinks)
-end
-GWB.test = FindBestConsumableInBags_
 
 -- FYI "Food" AuraId: 433
 local function ConsumeBestFoodIfPossible()
-    local foodIds = GWB.DB.classic.food_normal
-    local foodId, bag, slot, req = FindBestConsumableInBags(foodIds)
+    local foodId, bag, slot = GWB.Inv:FindUsableFood()
     if not foodId then return end
     if C_Container and C_Container.UseContainerItem then
         --print("C_Container.UseContainerItem(", bag, slot, ")")
@@ -151,8 +76,7 @@ end
 
 -- FYI "Drink" AuraId: 430
 local function ConsumeBestDrinkIfPossible()
-    local drinkIds = GWB.DB.classic.drinks
-    local drinkId, bag, slot, req = FindBestConsumableInBags(drinkIds)
+    local drinkId, bag, slot = GWB.Inv:FindUsableDrink()
     --print("drinkIds", drinkId, bag, slot, req)
     if not drinkId then return end
     if C_Container and C_Container.UseContainerItem then

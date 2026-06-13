@@ -848,7 +848,7 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
                  lz = (lastPoly.poly.bmin[3] + lastPoly.poly.bmax[3]) * 0.5
             end
             
-            local smoothPath = Nav.Funnel(corridor, {x=x1, y=y1, z=z1}, {x=lx, y=ly, lz=lz}, startTile)
+            local smoothPath = Nav.Funnel(corridor, {x=x1, y=y1, z=z1}, {x=lx, y=ly, z=lz}, startTile)
             dbgPrint(string.format("[EZNavSafe] Fallback path has %d waypoints to (%.1f, %.1f, %.1f)", #smoothPath, lx, ly, lz))
             return callback(smoothPath)
         end

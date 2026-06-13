@@ -172,10 +172,32 @@ local function OnLoad()
     isDedOrGhost = UnitIsDead("player") or UnitIsDeadOrGhost("player")
 end
 
+local engageTarget = nil
+local engageStartTime = 0
+
 -- Check for nearby mobs, no need to path to waypoints after 
 local function DoActiveEngage()
     if GWB.isPostCombatLooting then return false end
     if GWB:OnBotScanTick() then
+        if engageTarget ~= GWB.targetUnit then
+            engageTarget = GWB.targetUnit
+            engageStartTime = GetTime()
+        elseif GetTime() - engageStartTime > 15 then
+            -- Timed out trying to engage this unit (likely unreachable or evaded)
+            GWB:Print("Target encounter timed out. Blacklisting target.")
+            GWB.BlacklistedTargets = GWB.BlacklistedTargets or {}
+            local ptr = ObjectPointer(GWB.targetUnit)
+            if ptr then GWB.BlacklistedTargets[ptr] = GetTime() + 120 end -- Blacklist for 2 mins
+            
+            -- Clear target so we can move on
+            if Unlock and RunMacroText then
+                Unlock(RunMacroText, "/cleartarget")
+            end
+            GWB.targetUnit = nil
+            engageTarget = nil
+            return false
+        end
+
         -- force stop it if it target something so we can engage!!
         if GWB.Settings.UseEZNavSafe and GWB.EZMover:IsMoving() then
             GWB.EZMover:Stop()

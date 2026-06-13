@@ -3,6 +3,18 @@
 All notable changes to the Generic WoW Bot (GWB) project will be documented in this file.
 
 ## [Unreleased]
+- **Core (Routine):** Implemented Advanced Routine Recorder in `routineManager.lua`. Supports auto-simplification (Douglas-Peucker) for waypoints to keep profiles small and organic.
+- **Core (Routine):** Built `Default_RoutinePlayback` plugin to handle playback of JSON-saved routines. Includes automatic gossip replication and quest acceptance/turn-in hooks.
+- **UI:** Added new Recorder UI window for profile creation (Middle-Click Minimap or click World Map 'Recorder' button).
+- **Core (Utils):** Added `InteractOrApproach` utility to prevent long-range interaction deadlocks. Applies globally to ensure the player approaches `< 4.5` yards before sending `ObjectInteract()`.
+- **EZNavSafe:** Fixed A* Engine crash caused by a typo (`lz=lz` instead of `z=lz`) in the partial path fallback logic.
+- **UI (Map):** Fixed a map-draw crash (`attempt to perform arithmetic on local 'x' (a nil value)`) when waypoints pushed by external modules lacked 2D coordinates.
+- **Core (Inventory):** Implemented loot tracking via the `BAG_UPDATE` event in `inventoryManager.lua`. It now calculates item diffs and fires a generic `OnItemLooted` callback.
+- **Core (Inventory):** Built a generic `GetBestConsumable` function that dynamically iterates database requirements against the player's level to locate the optimal food/drink in the player's bags.
+- **Core (Inventory):** Added a global `GetAverageDurability` helper function to easily compute gear durability state.
+- **RestHandler:** Hooked up inventory parsing logic to dynamically consume the highest-tier food and water available rather than relying on natural regen ("rawdogging").
+- **TownHandler:** Implemented "Sell ALL" logic, ensuring all grey (Poor) quality items and tracked vendor trash are sold regardless of legacy tracking bugs.
+- **TownHandler:** Implemented critical fleeing logic. If attacked while running to town for repairs and average durability is below 10%, `TownHandler` will successfully suppress `CombatHandler` to flee rather than fighting with broken gear.
 - **Core (Navigation):** Implemented movement humanization. The bot now applies a randomized jitter (`± 0.5 - 1.0` yards) to its navigation waypoints so it doesn't run the exact same path linearly. It also has a small random chance to jump while running straight lines.
 - **Core (Navigation):** Added an interaction delay of 400-1200ms when stopping to interact with an object (e.g. looting a corpse) rather than clicking it on the very frame movement stops.
 - **CombatHandler:** Added reaction humanization. The bot now takes 1.5 - 3.0 seconds to pick a new target in its aggro radius, and randomized delays (0.2s - 0.8s) for updating facing/rotation, preventing perfectly mechanical snapping.

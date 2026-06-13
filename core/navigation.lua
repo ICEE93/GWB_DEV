@@ -211,7 +211,7 @@ local function EZMoverTick()
         if ox then
             local odx, ody, odz = ox - px, oy - py, oz - pz
             local objDist = math.sqrt(odx*odx + ody*ody + odz*odz)
-            if objDist < 5.0 then
+            if objDist < 3.5 then
                 -- We're close enough to the actual object — stop and interact!
                 ezPath = nil
                 GWB.EZMover.targetObj = nil
@@ -244,7 +244,7 @@ local function EZMoverTick()
     
     if dist < 1.5 then
         if ezPathIndex >= #ezPath then
-            local tx, ty, tz = wp.x, wp.y, wp.z
+            local tx, ty, tz = lastDestX, lastDestY, lastDestZ
             ezPath = nil
             GWB.EZMover.targetObj = nil
             -- Stop character movement
