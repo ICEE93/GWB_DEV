@@ -86,3 +86,5 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **StorageManager:** Silenced repetitive chat prints when saving to disk.
 - **Recorder:** Fixed an issue where stopping a recording and then saving would write an empty session to disk instead of the recorded steps.
 - **Recorder:** Fixed NPC interaction recording so it properly records the NPC ID using Object(" npc\) and added error handling to the OnGossipStart event to prevent silent failures.
+- **Quests:** Created Medium_QuestHandler.lua to dynamically scan nearby objects/NPCs (within a 40 yard radius) and cross-reference them with active WoW Classic quest objectives.
+- **Movement/Waypoints:** Fixed the issue where Waypoints would aggressively fight against Combat and Looting by cleanly yielding movement control when engaged with an enemy, looting, or pursuing a quest target.
