@@ -848,6 +848,30 @@ local function DumpTrainerServices()
                 tostring(isAvailable)
             )
         )
+        )
+    end
+end
+
+local function ApproachOrInteractTownNPC(npcInfo)
+    if not npcInfo then return end
+    local coord = npcInfo.coord
+    local px, py, pz = ObjectPosition("player")
+    local dist = 9999
+    if px then
+        dist = math.sqrt((coord.x-px)^2 + (coord.y-py)^2 + (coord.z-pz)^2)
+    end
+    
+    if dist < 4.5 then
+        -- Already close enough to the town marker! Try to interact with the live NPC directly.
+        local npcs = GWB.OM:FindNPCsById(npcInfo.id)
+        if npcs and #npcs > 0 then
+            GWB.Utils:InteractOrApproach(npcs[1], function(obj)
+                ObjectInteract(obj)
+            end, 4.5)
+        end
+    else
+        -- Too far away, keep navigating to the town marker
+        GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
     end
 end
 
@@ -869,8 +893,7 @@ local function tick_repair()
         lastRepairUpdate = tick
 
         if nearbyRepair then
-            local coord = nearbyRepair.coord
-            GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+            ApproachOrInteractTownNPC(nearbyRepair)
         end
     end
 
@@ -895,8 +918,7 @@ local function tick_vendor()
         lastRepairUpdate = tick
 
         -- move to it?
-        local coord = nearbyRepair.coord
-        GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+        ApproachOrInteractTownNPC(nearbyRepair)
     end
 
     return false
@@ -919,8 +941,7 @@ local function tick_goods()
         lastRepairUpdate = tick
 
         -- move to it?
-        local coord = nearbyGoods.coord
-        GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+        ApproachOrInteractTownNPC(nearbyGoods)
     end
 
     -- we good?
@@ -991,8 +1012,7 @@ local function tick_trainer()
         lastRepairUpdate = tick
 
         -- move to it?
-        local coord = nearbyTrainer.coord
-        GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+        ApproachOrInteractTownNPC(nearbyTrainer)
     end
 
     -- we good?

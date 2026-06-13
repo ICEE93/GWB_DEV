@@ -26,6 +26,8 @@ local questPending   = nil  -- "accept" or "complete" to drive quest dialog
 -- Public API
 -- ---------------------------------------------------------------------------
 
+GWB.RoutinePlayback = {}
+
 function GWB.RoutinePlayback:Load(name)
     local loaded, routineName = GWB.Routine:LoadFromDisk(name)
     if not loaded then
