@@ -324,10 +324,7 @@ function _tickTest()
         -- we NEED to face or else the CombatHandler wont reach combat state!
         if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
             ForceFaceTarget() -- keep facing
-            if GWB.Mover:IsMoving() then
-                print("stopfrocemove")
-                GWB.Mover:Stop() -- halt so we can engage combat
-            end
+            -- Removed GWB.Mover:Stop() to prevent tug of war with CombatHandler which is trying to approach the target
         end
     end
 
@@ -339,8 +336,7 @@ function _tickTest()
 
     -- eh? no waypoint logic nomore! gotta kill what we targetd first!
     if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
-        -- make sure we stand still?
-        if GWB.Mover:IsMoving() then GWB.Mover:HaltMovement() end
+        -- CombatHandler will handle moving towards the target, so we just return here.
         do return end 
     end
 

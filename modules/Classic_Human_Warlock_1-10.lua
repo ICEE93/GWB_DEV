@@ -108,15 +108,17 @@ local function _update()
     -- #         Town Handler         #
     -- #==============================#
 
-    --townHandler.settings.town_buy_drink.value = false -- bugged
-    townHandler.settings.town_repair_at_percent.value = 30
-    townHandler.settings.town_vendor_at_bags_free.value = 1
-    townHandler.settings.town_buy_food_count.value = 20
-    --townHandler.settings.town_buy_food.value = true -- bugged
-    townHandler.settings.town_buy_drink_count.value = 20 -- They need drinks
-
-    if lvl > 5 then
+    if townHandler then
+        --townHandler.settings.town_buy_drink.value = false -- bugged
+        townHandler.settings.town_repair_at_percent.value = 30
+        townHandler.settings.town_vendor_at_bags_free.value = 1
         townHandler.settings.town_buy_food_count.value = 20
+        --townHandler.settings.town_buy_food.value = true -- bugged
+        townHandler.settings.town_buy_drink_count.value = 20 -- They need drinks
+
+        if lvl > 5 then
+            townHandler.settings.town_buy_food_count.value = 20
+        end
     end
 end
 

@@ -8,6 +8,7 @@ plugin.author = "GWB"
 local tickerNamePostCombat = plugin.name .. "_PostCombatTick"
 local postCombatStarted = 0
 local lastLootingCorpse = nil
+local lastLootDist = 99999
 local previousCtx = nil
 
 plugin.cb_priority = GWB.enums.cb_priority.HIGH
