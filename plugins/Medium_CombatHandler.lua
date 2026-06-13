@@ -258,6 +258,8 @@ local function tickMovement()
     end
 end
 local function tickCombat()
+    if not GWB:IsBotRunning() then return end
+    
     --GWB:Debug("CombatHandle tickCombat")
     local tick = GetTime()
 

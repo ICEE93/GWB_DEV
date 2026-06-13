@@ -100,7 +100,10 @@ end
     end
 
     Unlock(CastSpellByName, "Shadow Bolt")
+end
+
 local function tickCombat()
+    if not GWB:IsBotRunning() then return end
     -- target is ok?
     if 
         not UnitExists("target") or 

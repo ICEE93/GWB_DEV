@@ -130,13 +130,31 @@ end
 -- ---------------------------------------------------------------------------
 local recordCallbacks = {}
 
+local function GetInteractObj()
+    local obj = GetNPCObject and GetNPCObject()
+    if not obj or ObjectType(obj) == 0 then
+        obj = PlayerTarget()
+    end
+    if not obj or ObjectType(obj) == 0 then
+        obj = GetMouseover()
+    end
+    return obj
+end
+
+local function GetObjId(obj)
+    if not obj then return 0 end
+    local t = ObjectType(obj)
+    if t == 5 then return ObjectUnitId(obj) or 0 end
+    return ObjectId(obj) or 0
+end
+
 recordCallbacks.OnGossipStart = function()
     if not activeSession then return end
     local px, py, pz = ObjectPosition("player")
     local mapId = C_Map.GetBestMapForUnit("player")
     -- capture NPC info
-    local npcObj = GetNPCObject and GetNPCObject()
-    local npcId   = npcObj and ObjectId(npcObj) or 0
+    local npcObj = GetInteractObj()
+    local npcId   = GetObjId(npcObj)
     local npcName = npcObj and ObjectName(npcObj) or "Unknown"
     -- capture gossip options at this moment
     C_Timer.After(0.3, function()
@@ -181,8 +199,8 @@ recordCallbacks.OnMerchantShow = function()
     if not activeSession then return end
     local px, py, pz = ObjectPosition("player")
     local mapId = C_Map.GetBestMapForUnit("player")
-    local npcObj  = GetNPCObject and GetNPCObject()
-    local npcId   = npcObj and ObjectId(npcObj) or 0
+    local npcObj  = GetInteractObj()
+    local npcId   = GetObjId(npcObj)
     local npcName = npcObj and ObjectName(npcObj) or "Vendor"
     AddStep("npc_interact", {
         npcId    = npcId,
@@ -191,6 +209,33 @@ recordCallbacks.OnMerchantShow = function()
         mapId    = mapId,
         isMerchant = true,
     })
+end
+
+recordCallbacks.OnLootStarted = function()
+    if not activeSession then return end
+    local px, py, pz = ObjectPosition("player")
+    local mapId = C_Map.GetBestMapForUnit("player")
+    
+    local obj = GetInteractObj()
+    local objId = GetObjId(obj)
+    local objName = obj and ObjectName(obj) or "Lootable Object"
+    
+    -- Try to figure out if it's a corpse or an object
+    local isCorpse = false
+    if obj then
+        if ObjectType(obj) == 10 then isCorpse = true end
+        if UnitIsDead(obj) then isCorpse = true end
+    end
+    
+    -- We mainly care about recording interactable objects, not every single dead mob
+    if not isCorpse and objId ~= 0 then
+        AddStep("object_interact", {
+            objectId   = objId,
+            objectName = objName,
+            x = px, y = py, z = pz,
+            mapId      = mapId,
+        })
+    end
 end
 
 -- ---------------------------------------------------------------------------
