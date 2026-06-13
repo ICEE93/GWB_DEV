@@ -12,7 +12,13 @@ GWB.Map.pointsPerMap = pointsPerMap
 
 --GWB.Map.isRunning = false
 function GWB.Map:IsRunning() 
-    return GWB.State:getCurrentState() == "plugin.Waypoints"
+    if not GWB.State or not GWB.State.stateStack then return false end
+    for i = 1, #GWB.State.stateStack do
+        if GWB.State.stateStack[i] == "plugin.Waypoints" then
+            return true
+        end
+    end
+    return false
 end
 function GWB.Map:SetIsRunning(enable)
     -- NOTE: we should walk the stack? and find "plugin.Waypoints?"
