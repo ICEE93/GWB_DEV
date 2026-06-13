@@ -271,74 +271,32 @@ function _tickTest()
         return
     end
 
-    -- do not conflict when in combat??
-    --if UnitAffectingCombat("player") then
-    -- NOTE: we MUST use this to respect the CombatHandler!!!
-    if inCombat then
-        --do return end -- hacky?
-        -- do not pull, but DO update target if none
-        -- note, dont be moving?
-        --[[if GWB.Mover.IsMoving() then
-            GWB.Mover:Stop()
-        end]]
-        --print("aggro skip")
-        --[[ ACTUASLLY we be want to loot!
-        if GetUnitSpeed("player") ~= 0 then
-            GWB.Mover:HaltMovement() -- eeh?
-            --GWB.Mover:Update()
-            --local px, py, pz = GWB.Mover.GetPlayerPosition()
-            --ClickToMove(px, py, pz) -- force stop!
-            print("FORCE STOP FORWARD")
-            -- NOTE: this bug is caused below somehow?
-            Unlock(MoveForwardStart)
-            C_Timer.After(0, function() Unlock(MoveForwardStop) end)
-        end]]
-        
-        --print("skip waypoint move, only ActiveEngage!")
-        return
-    --[[else
-        -- no combat yet? check for mobs, active engage?
-        if not UnitExists("target") or not UnitCanAttack("player", "target") or UnitIsDead("target") then
-            -- only update if the enemy is ded?
-            print("no target, do engage!")
-            if DoActiveEngage() then -- keep finding new targets?
-                if GWB.Mover:IsMoving() then
-                    GWB.Mover:Stop() -- halt so we can engage combat
-                end
-            end
-        else
-            ForceFaceTarget() -- keep facing
-        end]]
-    else
-        -- not in combat, now a good time to check up on durability and switch if needed?
-        local townHandlerPlugin = GWB.plugins["TownHandler"] 
-        if townHandlerPlugin ~= nil then
-            if townHandlerPlugin.handlers.NeedTown() then
-                -- okay, call into the TownHandler!
-                print("Going to town!")
-                GWB.State:callState("plugin.TownHandler")
-                return
-            end
-        end
+    if inCombat then return end
 
-        -- we NEED to face or else the CombatHandler wont reach combat state!
-        if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
-            ForceFaceTarget() -- keep facing
-            -- Removed GWB.Mover:Stop() to prevent tug of war with CombatHandler which is trying to approach the target
+    -- Yield to QuestHandler if pursuing a quest objective
+    if GWB.QuestTarget then return end
+
+    -- not in combat, now a good time to check up on durability and switch if needed?
+    local townHandlerPlugin = GWB.plugins["TownHandler"] 
+    if townHandlerPlugin ~= nil then
+        if townHandlerPlugin.handlers.NeedTown() then
+            -- okay, call into the TownHandler!
+            print("Going to town!")
+            GWB.State:callState("plugin.TownHandler")
+            return
         end
     end
 
     -- do not interrupt if we are casting?
     if UnitCastingInfo("player") ~= nil or UnitChannelInfo("player") ~= nil then
-        --print("hold, we castin'")
         return
     end
 
-    -- eh? no waypoint logic nomore! gotta kill what we targetd first!
+    -- yield to CombatHandler if we have a valid attack target
     if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
-        -- CombatHandler will handle moving towards the target, so we just return here.
-        do return end 
+        return 
     end
+
 
     local useGlider = plugin.settings.use_glider.value
     local gliderZOff = plugin.settings.glider_z_offset.value
