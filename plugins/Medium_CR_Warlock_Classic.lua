@@ -77,7 +77,8 @@ end
 local function ShouldCast()
     return not ShouldNotCast()
 end
-
+local function tickRested()
+    if not GWB.Map:IsRunning() then return end
     if not ShouldCast() then return end
 
     if not HasAura("player", "Demon Armor", "HELPFUL") and not HasAura("player", "Demon Skin", "HELPFUL") then
@@ -103,7 +104,7 @@ end
 end
 
 local function tickCombat()
-    if not GWB:IsBotRunning() then return end
+    if not GWB.Map:IsRunning() then return end
     -- target is ok?
     if 
         not UnitExists("target") or 

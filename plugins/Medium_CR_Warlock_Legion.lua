@@ -70,7 +70,7 @@ local function ShouldCast()
 end
 
 local function tickRested()
-    if not GWB:IsBotRunning() then return end
+    if not GWB.Map:IsRunning() then return end
     if 
         not UnitExists("target") or 
         UnitIsDead("target") or
@@ -89,7 +89,7 @@ local function tickRested()
     Unlock(CastSpellByID, Immolate)
 end
 local function tickCombat()
-    if not GWB:IsBotRunning() then return end
+    if not GWB.Map:IsRunning() then return end
     -- target is ok?
     if 
         not UnitExists("target") or 

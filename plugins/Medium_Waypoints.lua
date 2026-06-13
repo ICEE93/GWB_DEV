@@ -257,7 +257,6 @@ local function ForceFaceTarget()
 end
 
 function _tickTest() 
-    if not GWB:IsBotRunning() then return end
     if not GWB.Map:IsRunning() then
         return
     end
