@@ -67,7 +67,7 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     local jy = y + (math.random() * 1.5 - 0.75)
     
     local playerDist = math.sqrt((jx-px)^2 + (jy-py)^2 + (z-pz)^2)
-    if playerDist < 1.5 then
+    if playerDist < 5.5 then
         ezPath = {{x=px, y=py, z=pz}, {x=jx, y=jy, z=z}}
         ezPathIndex = 2
         return
@@ -77,6 +77,29 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     Nn.EZ.Nav.GeneratePath(px, py, pz, jx, jy, z, function(path)
         isGenerating = false
         if path and type(path) == "table" and #path > 1 then
+            -- Jitter path and trim nodes behind us
+            for i = 2, #path do
+                if i < #path then
+                    -- Circular node jittering instead of exact coordinate
+                    path[i].x = path[i].x + (math.random() * 2.5 - 1.25)
+                    path[i].y = path[i].y + (math.random() * 2.5 - 1.25)
+                end
+            end
+            
+            -- Trim nodes that we are already past
+            while #path > 2 do
+                local node = path[2]
+                local nextNode = path[3]
+                local d1 = math.sqrt((node.x-px)^2 + (node.y-py)^2)
+                local d2 = math.sqrt((nextNode.x-px)^2 + (nextNode.y-py)^2)
+                -- If we are closer to the 3rd node than the 2nd node, or 2nd node is very close, skip 2nd node
+                if d1 < 2.0 or d2 < d1 then
+                    table.remove(path, 2)
+                else
+                    break
+                end
+            end
+            
             ezPath = path
             ezPathIndex = 2
             if ezPath[ezPathIndex] then
@@ -271,10 +294,6 @@ local function EZMoverTick()
         end
         ezPathIndex = ezPathIndex + 1
         wp = ezPath[ezPathIndex]
-        
-        -- Add jitter to waypoints
-        wp.x = wp.x + (math.random() * 1.0 - 0.5)
-        wp.y = wp.y + (math.random() * 1.0 - 0.5)
         
         ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z)
     else

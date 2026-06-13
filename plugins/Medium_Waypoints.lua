@@ -411,35 +411,40 @@ function _tickTest()
       end
       print(".. Taking next point!!")
       updateMov = true -- force update Mover 
+      
+      -- Reroll the jitter so we don't click the exact same spot next time
+      local nextP = points[pointIndex]
+      nextP.jx = (math.random() * 4.0) - 2.0
+      nextP.jy = (math.random() * 4.0) - 2.0
     end
 
     -- update mesh if needed???
     if updateMov and #points ~= 0 then 
         local p = points[pointIndex]
         
-        --GWB.Mover:DoWaypoints(path)
-        --GWB:Debug("Set waypoints #path is", #path)
-
-        --GWB:Debug("Set waypoints #points is", #points)
+        local jx = p.jx or ((math.random() * 4.0) - 2.0)
+        local jy = p.jy or ((math.random() * 4.0) - 2.0)
+        p.jx = jx
+        p.jy = jy
+        
+        local targetX = p.wx + jx
+        local targetY = p.wy + jy
 
         p.wz = 400
         -- 0x100 Terrain, 0x10 WMOCollision, 0x1 M2Collision
         -- we can skip M2 to avoid tree's and other bullshit
-        local cx, cy, cz = TraceLine(p.wx, p.wy, 5000, p.wx, p.wy, -5000, 0x110)
+        local cx, cy, cz = TraceLine(targetX, targetY, 5000, targetX, targetY, -5000, 0x110)
         if cx ~= false then
             p.wz = cz
         end
 
         if useGlider and true then
-            GWB:Debug("ride", p.wx, p.wy, p.wz+gliderZOff)
-
-            GWB.dragon.ride(p.wx, p.wy, p.wz+gliderZOff)
+            GWB:Debug("ride", targetX, targetY, p.wz+gliderZOff)
+            GWB.dragon.ride(targetX, targetY, p.wz+gliderZOff)
         elseif GWB.Settings.UseEZNavSafe and GWB.EZMover then
-            GWB.EZMover:MoveToXYZ(p.wx, p.wy, p.wz)
+            GWB.EZMover:MoveToXYZ(targetX, targetY, p.wz)
         else
-            --ClickToMove(p.wx, p.wy, p.wz)
-            --print("MOVETOXTZ YESS", inCombat)
-            GWB.Mover:MoveToXYZ(p.wx, p.wy, p.wz)
+            GWB.Mover:MoveToXYZ(targetX, targetY, p.wz)
         end
     else
         -- always tick dragon!
