@@ -84,3 +84,5 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **LootHandler:** Fixed an issue where the bot was completely unable to loot. Previously, the bot was rapidly spamming ObjectInteract every 0.1s and sending a ClickToMove command to its own coordinates, which forcibly canceled the interaction and continually interrupted the server's Auto-Loot action before the items could be pulled into the inventory. The interaction is now properly debounced with a 2-second grace period.
 - **Movement/Navigation:** Removed random jitter on intermediate nav-mesh nodes which was causing super jank zig-zag movement and OnMovementFinished chat spam.
 - **StorageManager:** Silenced repetitive chat prints when saving to disk.
+- **Recorder:** Fixed an issue where stopping a recording and then saving would write an empty session to disk instead of the recorded steps.
+- **Recorder:** Fixed NPC interaction recording so it properly records the NPC ID using Object(" npc\) and added error handling to the OnGossipStart event to prevent silent failures.
