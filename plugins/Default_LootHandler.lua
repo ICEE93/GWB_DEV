@@ -49,6 +49,11 @@ local function tickPostCombat()
         -- try looting?
         local corpses = GWB.OM:GetNearbyLootableCorpses()
         if #corpses == 0 then
+            if GetTime() - postCombatStarted < 1.5 then
+                -- Give the server up to 1.5s to flag the corpse as lootable before we give up
+                return
+            end
+            
             GWB:Debug("No loot? returning!")
             lastLootingCorpse = nil
 
@@ -136,6 +141,14 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     previousCtx = ctx
 
     GWB:Print("OnPlayerLeaveCombat LootHandler")
+    
+    -- Immediately stop the player so they don't keep running away while we generate a path
+    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+        if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+    elseif GWB.Mover then
+        if GWB.Mover:IsMoving() then GWB.Mover:Stop() end
+    end
+    
     postCombatStarted = GetTime()
     GWB:TickerSetState(tickerNamePostCombat, true)
     GWB.isPostCombatLooting = true
