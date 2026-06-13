@@ -41,8 +41,10 @@ local function checkYield()
     end
 end
 
+local ENABLE_DEBUG_PRINTS = false
+
 local function dbgPrint(...)
-    if Nav.Config and Nav.Config.Debug then
+    if ENABLE_DEBUG_PRINTS then
         print(...)
     end
 end
@@ -128,18 +130,10 @@ function Nav.LoadMapHeader(mapId)
     end
 
     if not data then 
-        print(string.format("|cff00ff00MMap Editor:|r Map %d, Tile %d_%d", mapId, tx, ty))
-        print("Path: " .. path)
-        
-        local px, py, pz = ObjectPosition("player")
-        print(string.format("Player Pos: %.1f, %.1f, %.1f", px, py, pz))
-        print("|cffff0000[EZNav]|r Checked 7 path variations. File access denied or path invalid.")
+        --dbgPrint(string.format("|cff00ff00MMap Editor:|r Map %d", mapId))
+        --dbgPrint("Path: " .. path)
+        dbgPrint("|cffff0000[EZNav]|r Map header not found.")
         return nil 
-    end
-    
-    if not Nav.FoundPathFormat then
-        Nav.FoundPathFormat = successfulPath:gsub(name, "%%s")
-        print("|cff00ff00[EZNav]|r Found valid mmap path style: " .. successfulPath)
     end
     
     -- Parse bitmask (512 bytes starting at offset 8)
@@ -237,9 +231,9 @@ function Nav.LoadTile(mapId, tx, ty)
     h.bmax = { readFloat(data, 113), readFloat(data, 105), readFloat(data, 109) } -- {WoW_X, WoW_Y, WoW_Z}
     
     if Nav.Config.Debug then
-        print(string.format("|cffaaaaaa[EZNav]|r Tile %d_%d World Bounds:", tx, ty))
-        print(string.format("  X: %.1f to %.1f", h.bmin[1], h.bmax[1]))
-        print(string.format("  Y: %.1f to %.1f", h.bmin[2], h.bmax[2]))
+        dbgPrint(string.format("|cffaaaaaa[EZNav]|r Tile %d_%d World Bounds:", tx, ty))
+        dbgPrint(string.format("  X: %.1f to %.1f", h.bmin[1], h.bmax[1]))
+        dbgPrint(string.format("  Y: %.1f to %.1f", h.bmin[2], h.bmax[2]))
     end
 
     -- Detour Standard Byte Stack
@@ -273,7 +267,7 @@ function Nav.LoadTile(mapId, tx, ty)
         local v = tile.verts[0]
         if v then
             -- Print as WoW_X, WoW_Y, WoW_Z
-            print(string.format("|cffaaaaaa[EZNav]|r Vertex #0 (X,Y,Z): %.1f, %.1f, %.1f", v[1], v[2], v[3]))
+            dbgPrint(string.format("|cffaaaaaa[EZNav]|r Vertex #0 (X,Y,Z): %.1f, %.1f, %.1f", v[1], v[2], v[3]))
         end
     end
     
@@ -866,7 +860,7 @@ updateFrame:SetScript("OnUpdate", function()
     if activeSearch then
         local status, err = coroutine.resume(activeSearch)
         if not status then
-            print("|cffff0000[EZNavSafe] A* Engine Crashed:|r", tostring(err))
+            dbgPrint("|cffff0000[EZNavSafe] A* Engine Crashed:|r", tostring(err))
             activeSearch = nil
         elseif coroutine.status(activeSearch) == "dead" then
             activeSearch = nil
