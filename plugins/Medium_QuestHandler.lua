@@ -38,7 +38,9 @@ local function UpdateQuestCache()
     end
 end
 
-local function IsQuestieObjectiveFast(obj)
+-- Make it accessible globally
+GWB.QuestHandler = GWB.QuestHandler or {}
+GWB.QuestHandler.IsQuestieObjectiveFast = function(obj)
     if not Questie or not QuestiePlayer or type(QuestiePlayer.currentQuestlog) ~= "table" then return false end
     
     local typeId = ObjectType(obj)
@@ -83,6 +85,8 @@ local function IsQuestieObjectiveFast(obj)
     end
     return false
 end
+
+local IsQuestieObjectiveFast = GWB.QuestHandler.IsQuestieObjectiveFast
 
 -- Scans nearby units/objects to see if their tooltip matches an active objective
 local function ScanNearbyObjectives()
@@ -217,6 +221,12 @@ function plugin.OnStart()
     UpdateQuestCache()
     GWB:TickerSetState(cacheTickerName, true)
     GWB:TickerSetState(scanTickerName, true)
+    
+    if Questie then
+        GWB:Print("[Questie] Integration Active: Questie detected. Objective hunting enhanced.")
+    else
+        GWB:Print("[Questie] Integration Inactive: Questie not found. Falling back to Tooltip scanning.")
+    end
 end
 
 function plugin.OnStop()

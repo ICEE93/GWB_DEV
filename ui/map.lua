@@ -270,10 +270,24 @@ function GWB:OnBotScanTick(losCheck)
               ctype ~= 8 -- Critter type
             then
                 local x, y, z = ObjectPosition(o)
-                --print(px, py, 0, x, y, 0)
                 local d = Distance(px, py, 0, x, y, 0)
                 if d < dist then
-                    -- LoS, and Z diff?
+                    -- If Questie integration is active, restrict pulling to quest objectives only
+                    local isQuestieMob = true
+                    if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
+                        if Questie and QuestiePlayer and type(QuestiePlayer.currentQuestlog) == "table" then
+                            local hasActiveQuests = false
+                            for _, q in pairs(QuestiePlayer.currentQuestlog) do
+                                if type(q) == "table" and not q.isComplete then hasActiveQuests = true; break end
+                            end
+                            if hasActiveQuests then
+                                isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                            end
+                        end
+                    end
+
+                    if isQuestieMob then
+                        -- LoS, and Z diff?
                     local diffZ = pz - z;
 
                     local badHeight = diffZ > 30 or diffZ < -30;
@@ -288,6 +302,7 @@ function GWB:OnBotScanTick(losCheck)
                             target = o
                             dist = d
                         end
+                    end
                     end
                 end
             end

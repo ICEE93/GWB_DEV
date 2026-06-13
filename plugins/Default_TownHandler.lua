@@ -354,14 +354,17 @@ local function IsRepairNeeded()
     return lowestPct < repairAfter
 end
 
+local lastVendorSaleTime = 0
 local function IsVendorFinished()
     --print("#sellQueue", 0, "slots", GWB.Inv:GetTotalFreeBagSlots())
-    if #sellQueue == 0 then
+    if #sellQueue == 0 and GetTime() > lastVendorSaleTime + 2.0 then
         return GWB.Inv:GetTotalFreeBagSlots() >= 2
     end
     return false
 end
 local function IsVendorNeeded()
+    if blacklistRepairUntil > GetTime() then return false end
+    if GetTime() < lastVendorSaleTime + 2.0 then return true end
     return GWB.Inv:GetTotalFreeBagSlots() < 2
 end
 
@@ -760,6 +763,7 @@ local function ProcessSellQueue()
 
     -- This sells to the merchant when their window is open
     C_Container.UseContainerItem(entry.bag, entry.slot)
+    lastVendorSaleTime = GetTime()
 end
 
 local function _trigger_repair_btn()
@@ -897,7 +901,14 @@ local function tick_repair()
     end
 
     if nearbyRepair == nil then
-        return true -- skip, cuz we failed?
+        -- If we are on cooldown from lastRepairUpdate, we shouldn't return true (fail).
+        -- Returning true causes stateTick to mark it as checked and pop the state!
+        -- Only return true if we ACTUALLY failed to find a vendor when the cooldown allowed us to search.
+        if lastRepairUpdate+5 < tick then 
+            return true 
+        else
+            return false -- wait for cooldown
+        end
     end
 
     return false
@@ -918,6 +929,10 @@ local function tick_vendor()
 
         -- move to it?
         ApproachOrInteractTownNPC(nearbyRepair)
+    end
+
+    if nearbyRepair == nil then
+        if lastRepairUpdate+5 < tick then return true else return false end
     end
 
     return false
@@ -945,6 +960,10 @@ local function tick_goods()
 
     -- we good?
     if IsGoodsFinished() then return true end
+
+    if nearbyGoods == nil then
+        if lastRepairUpdate+5 < tick then return true else return false end
+    end
 
     if merchantOpened then
         -- Humanize interaction delay (0.8s - 2.5s)
@@ -1024,6 +1043,10 @@ local function tick_trainer()
             lastBuyTick = tick
             print('learn those spells!')
         end
+    end
+
+    if nearbyTrainer == nil then
+        if lastRepairUpdate+5 < tick then return true else return false end
     end
 
     return false

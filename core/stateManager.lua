@@ -94,9 +94,14 @@ local function tick()
         local retState = type(next_state) == "boolean" and next_state == true
         if retState then
             -- consume and return to previous state
-            print("!NextState.pop ", GWB.State:getCurrentState(), "->", next_state)
-            --GWB.State.currentState = next_state
-            GWB.State:returnState()
+            -- print("!NextState.pop ", GWB.State:getCurrentState(), "->", next_state)
+            if not GWB.State:returnState() then
+                -- Stack underflow prevention: if we are at the bottom of the stack and it pops,
+                -- fallback to the default Waypoints state to avoid an infinite popping loop.
+                if GWB.State.stateStack[1] ~= "plugin.Waypoints" then
+                    GWB.State.stateStack[1] = "plugin.Waypoints"
+                end
+            end
         end
 
         if type(next_state) == "string" then
