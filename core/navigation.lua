@@ -80,7 +80,7 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
             ezPath = path
             ezPathIndex = 2
             if ezPath[ezPathIndex] then
-                ClickToMove(ezPath[ezPathIndex].x, ezPath[ezPathIndex].y, ezPath[ezPathIndex].z)
+                GWB.EZMover:ClickToMoveSafeZ(ezPath[ezPathIndex].x, ezPath[ezPathIndex].y, ezPath[ezPathIndex].z)
             end
         else
             GWB:Print("EZNavSafe: Failed to generate path to destination.")
@@ -96,6 +96,10 @@ function GWB.EZMover:Stop()
     GWB.EZMover.targetObj = nil
     local px, py, pz = ObjectPosition("player")
     if px then ClickToMove(px, py, pz) end
+end
+
+function GWB.EZMover:GetDestXYZ()
+    return lastDestX, lastDestY, lastDestZ
 end
 
 function GWB.EZMover:StartMove()
@@ -119,6 +123,19 @@ end
 
 function GWB.EZMover:IsMoving()
     return ezPath ~= nil or isGenerating
+end
+
+function GWB.EZMover:ClickToMoveSafeZ(x, y, z)
+    local tLine = TraceLine or (Nn and Nn.TraceLine)
+    local finalZ = z
+    if tLine then
+        -- Find ground Z by tracing straight down
+        local hx, hy, hz = tLine(x, y, z + 500, x, y, z - 500, 0x111)
+        if hx and hz then
+            finalZ = hz
+        end
+    end
+    ClickToMove(x, y, finalZ)
 end
 
 local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
@@ -188,7 +205,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         end
     end
     
-    ClickToMove(finalX, finalY, finalZ)
+    GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
 end
 
 local function EZMoverTick()
@@ -248,7 +265,7 @@ local function EZMoverTick()
             ezPath = nil
             GWB.EZMover.targetObj = nil
             -- Stop character movement
-            ClickToMove(px, py, pz)
+            GWB.EZMover:ClickToMoveSafeZ(px, py, pz)
             GWB:FireCallback("OnMovementFinished", "xyz", tx, ty, tz)
             return
         end
@@ -285,14 +302,21 @@ if GWB.Mover then
     local orig_Mover_IsMoving = GWB.Mover.IsMoving
     local orig_Mover_StartMove = GWB.Mover.StartMove
 
-    function GWB.Mover:MoveToXYZ(x, y, z, dist)
-        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+    function GWB.Mover:MoveToXYZ(x, y, z)
+        if GWB.Settings.UseEZNavSafe then
+            local lx, ly, lz = GWB.EZMover:GetDestXYZ()
+            if lx then
+                local destDist = math.sqrt((x-lx)^2 + (y-ly)^2 + (z-lz)^2)
+                if GWB.EZMover:IsMoving() and destDist < 2.0 then
+                    return true
+                end
+            end
+            -- We intercept the command and pass it to EZMover
             if orig_Mover_Stop then orig_Mover_Stop(self) end
-            GWB.EZMover:MoveToXYZ(x, y, z)
-            return true
+            return GWB.EZMover:MoveToXYZ(x, y, z)
         end
         if orig_Mover_MoveToXYZ then
-            return orig_Mover_MoveToXYZ(self, x, y, z, dist)
+            return orig_Mover_MoveToXYZ(self, x, y, z)
         end
     end
 

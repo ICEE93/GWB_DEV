@@ -94,6 +94,21 @@ local function tickPostCombat()
             end
             if isMoveOk then
                 lastLootingCorpse = nearbyCorpses
+                lastLootDist = 99999
+            end
+        end
+    else
+        -- If we have a corpse, check if we are making progress
+        local px, py, pz = ObjectPosition("player")
+        if px then
+            local cx, cy, cz = ObjectPosition(lastLootingCorpse)
+            if cx then
+                local dist = math.sqrt((cx-px)^2 + (cy-py)^2 + (cz-pz)^2)
+                if dist < lastLootDist - 0.5 then
+                    lastLootDist = dist
+                    -- Reset timeout since we are making progress
+                    postCombatStarted = GetTime() - (timeoutSeconds - 5) -- Give it at least 5 seconds from now
+                end
             end
         end
     end

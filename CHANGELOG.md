@@ -64,3 +64,6 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - fix: implement single bulk purchase for merchant items
 - feat: add classic warlock combat routine opening rotation
 - fix: correct world map UI anchoring to prevent obscurement
+- **TownHandler:** Fixed target oscillation and MoveToXYZ stutter flip-flopping by caching the town NPC targets individually, and adding a destDist check to prevent restarting active movement.
+- **Core (Navigation):** Implemented ClickToMoveSafeZ logic to prevent clicking into the sky. It now traces downward (0x111) to find the correct terrain height at the requested XY coordinate before triggering ClickToMove.
+- **Core (Logic):** Fixed premature timeouts when pathing to distant enemies or corpses. The 15-second combat engagement timeout and 7-second looting timeout now dynamically refresh as long as the player's distance to the target is actively decreasing. This ensures the bot never gives up while making progress towards a far target, but will still properly timeout if hard-stuck.

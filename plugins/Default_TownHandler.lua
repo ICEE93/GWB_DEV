@@ -62,7 +62,10 @@ plugin.settings = {
 }
 
 
+local lastStep = nil
 local nearbyRepair = nil
+local nearbyGoods = nil
+local nearbyTrainer = nil
 local lastRepairUpdate = 0
 local lastSellAllDone = 0 -- we can sell during repair also >:3
 local merchantOpened = false
@@ -859,35 +862,36 @@ local function tick_repair()
 
     local tick = GetTime()
     if lastRepairUpdate+5 < tick then
-        nearbyRepair = FindNearbyRepairNPC()
-        print("updated nearbyRepair")
+        if nearbyRepair == nil then
+            nearbyRepair = FindNearbyRepairNPC()
+            print("updated nearbyRepair")
+        end
         lastRepairUpdate = tick
 
-        -- move to it?
-        local coord = nearbyRepair.coord
-        GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+        if nearbyRepair then
+            local coord = nearbyRepair.coord
+            GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+        end
     end
 
-    -- no repair? we fucked, just continue?
     if nearbyRepair == nil then
-        return false -- skip, cuz we failed?
+        return true -- skip, cuz we failed?
     end
 
-    return true -- all was OK
+    return false
 end
 local function tick_vendor()
-    -- eh? take repair window?
-
-    -- move to Repair as we know him by now
     local tick = GetTime()
     if lastRepairUpdate+5 < tick then
-        nearbyRepair = FindNearbyRepairNPC()
         if nearbyRepair == nil then
-            GWB:Print("Error, not Repair NPC found in this map!")
-            blacklistRepairUntil = tick + (60 * 45) -- 45 min only?
-            return true
+            nearbyRepair = FindNearbyRepairNPC()
+            if nearbyRepair == nil then
+                GWB:Print("Error, not Repair NPC found in this map!")
+                blacklistRepairUntil = tick + (60 * 45) -- 45 min only?
+                return true
+            end
+            print("updated nearbyRepair for vendor")
         end
-        print("updated nearbyRepair")
         lastRepairUpdate = tick
 
         -- move to it?
@@ -903,17 +907,19 @@ local function tick_goods()
     -- move to Goods??
     local tick = GetTime()
     if lastRepairUpdate+5 < tick then
-        nearbyRepair = FindNearbyGoodsNPC()
-        if nearbyRepair == nil then
-            GWB:Print("Failed finding goods NPC!")
-            blacklistGoodsUntil = tick + (60 * 60 * 1) --1h timeout
-            return true -- eh?
+        if nearbyGoods == nil then
+            nearbyGoods = FindNearbyGoodsNPC()
+            if nearbyGoods == nil then
+                GWB:Print("Failed finding goods NPC!")
+                blacklistGoodsUntil = tick + (60 * 60 * 1) --1h timeout
+                return true -- eh?
+            end
+            print("updated nearbyGoods")
         end
-        print("updated nearbyGoods")
         lastRepairUpdate = tick
 
         -- move to it?
-        local coord = nearbyRepair.coord
+        local coord = nearbyGoods.coord
         GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
     end
 
@@ -972,19 +978,20 @@ local function tick_trainer()
 
     -- move to Trainer??
     local tick = GetTime()
-    --print("lastRepairUpdate", lastRepairUpdate, tick)
     if lastRepairUpdate+5 < tick then
-        nearbyRepair = FindNearbyClassTrainerNPC()
-        if nearbyRepair == nil then
-            GWB:Print("Failed finding class trainer!")
-            blacklistClassTrainerUntil = tick + (60 * 60 * 2) -- 2h?
-            return true
+        if nearbyTrainer == nil then
+            nearbyTrainer = FindNearbyClassTrainerNPC()
+            if nearbyTrainer == nil then
+                GWB:Print("Failed finding class trainer!")
+                blacklistClassTrainerUntil = tick + (60 * 60 * 2) -- 2h?
+                return true
+            end
+            print("updated nearbyTrainer")
         end
-        print("updated nearbyTrainer")
         lastRepairUpdate = tick
 
         -- move to it?
-        local coord = nearbyRepair.coord
+        local coord = nearbyTrainer.coord
         GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
     end
 
@@ -1017,6 +1024,56 @@ plugin.handlers.stateTick = function()
         repairChecked = true
     else
         repairChecked = false
+    end
+
+    local vendorChecked = false
+    local vendorNeeded = IsVendorNeeded()
+    local vendorDone = IsVendorFinished()
+
+    if not vendorNeeded then
+        vendorChecked = true
+    elseif vendorDone then
+        vendorChecked = true
+    else
+        vendorChecked = false
+    end
+
+    local goodsChecked = false
+    local goodsNeeded = IsGoodsNeeded()
+    local goodsDone = IsGoodsFinished()
+
+    if not goodsNeeded then
+        goodsChecked = true
+    elseif goodsDone then
+        goodsChecked = true
+    else
+        goodsChecked = false
+    end
+
+    local trainerChecked = false
+    local trainerNeeded = IsClassTrainerNeeded()
+    local trainerDone = IsClassTrainerFinished()
+
+    if not trainerNeeded then
+        trainerChecked = true
+    elseif trainerDone then
+        trainerChecked = true
+    else
+        trainerChecked = false
+    end
+
+    local currentStep = nil
+    if not repairChecked then currentStep = "repair"
+    elseif not vendorChecked then currentStep = "vendor"
+    elseif not goodsChecked then currentStep = "goods"
+    elseif not trainerChecked then currentStep = "trainer"
+    end
+
+    if lastStep ~= currentStep then
+        nearbyRepair = nil
+        nearbyGoods = nil
+        nearbyTrainer = nil
+        lastStep = currentStep
     end
 
     --print("repairNeeded:", repairNeeded, ", repairDone:", repairDonem, ", repairChecked: ", repairChecked)
@@ -1254,16 +1311,21 @@ end
 plugin.callbacks.OnMovementFinished = function(ctx, type, tx, ty, tz)
     if type ~= "xyz" then return end
 
-    if nearbyRepair == nil or nearbyRepair.coord == nil then return end 
+    local activeTarget = nil
+    if lastStep == "repair" or lastStep == "vendor" then activeTarget = nearbyRepair
+    elseif lastStep == "goods" then activeTarget = nearbyGoods
+    elseif lastStep == "trainer" then activeTarget = nearbyTrainer end
+
+    if activeTarget == nil or activeTarget.coord == nil then return end 
 
     -- check if us?
-    local coord = nearbyRepair.coord
+    local coord = activeTarget.coord
     
     if coord.x ~= tx or coord.y ~= ty or coord.z ~= tz then return end
     
-    print("Mover finished walking to Repair", nearbyRepair.id ," at ", tx, ty, tz)
+    print("Mover finished walking to Town Target", activeTarget.id ," at ", tx, ty, tz)
 
-    local npcs = GWB.OM:FindNPCsById(nearbyRepair.id)
+    local npcs = GWB.OM:FindNPCsById(activeTarget.id)
 
     -- Use InteractOrApproach to ensure we are actually close enough
     for i=1, #npcs do

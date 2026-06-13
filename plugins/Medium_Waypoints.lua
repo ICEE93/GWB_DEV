@@ -174,6 +174,7 @@ end
 
 local engageTarget = nil
 local engageStartTime = 0
+local engageLastDist = 99999
 
 -- Check for nearby mobs, no need to path to waypoints after 
 local function DoActiveEngage()
@@ -182,7 +183,21 @@ local function DoActiveEngage()
         if engageTarget ~= GWB.targetUnit then
             engageTarget = GWB.targetUnit
             engageStartTime = GetTime()
-        elseif GetTime() - engageStartTime > 15 then
+            engageLastDist = 99999
+        else
+            local px, py, pz = ObjectPosition("player")
+            local tx, ty, tz = ObjectPosition(engageTarget)
+            if px and tx then
+                local dist = math.sqrt((tx-px)^2 + (ty-py)^2 + (tz-pz)^2)
+                -- If distance is actively decreasing, refresh the timeout
+                if dist < engageLastDist - 0.5 then
+                    engageLastDist = dist
+                    engageStartTime = GetTime()
+                end
+            end
+        end
+
+        if engageTarget == GWB.targetUnit and GetTime() - engageStartTime > 15 then
             -- Timed out trying to engage this unit (likely unreachable or evaded)
             GWB:Print("Target encounter timed out. Blacklisting target.")
             GWB.BlacklistedTargets = GWB.BlacklistedTargets or {}
