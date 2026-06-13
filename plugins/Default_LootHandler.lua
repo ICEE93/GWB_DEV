@@ -152,6 +152,9 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
         if GWB.Mover:IsMoving() then GWB.Mover:Stop() end
     end
     
+    local px, py, pz = ObjectPosition("player")
+    if px then ClickToMove(px, py, pz) end
+    
     postCombatStarted = GetTime()
     GWB:TickerSetState(tickerNamePostCombat, true)
     GWB.isPostCombatLooting = true

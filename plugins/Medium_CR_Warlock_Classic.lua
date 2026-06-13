@@ -51,6 +51,11 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     return false -- do not consume
 end
 
+local nextSpellCastTime = 0
+local function RandomizeNextCast()
+    nextSpellCastTime = GetTime() + (0.15 + math.random() * 0.4)
+end
+
 local function ShouldNotCast()
     -- not alrdy casting or moving?
     if UnitCastingInfo("player") ~= nil then
@@ -62,6 +67,9 @@ local function ShouldNotCast()
     local curr, _, _, _ = GetUnitSpeed("player")
     if curr ~= 0 then
         return true -- moving
+    end
+    if GetTime() < nextSpellCastTime then
+        return true -- humanization delay
     end
     return false
 end
@@ -84,11 +92,13 @@ local function tickRested()
     if not HasAura("player", "Demon Armor", "HELPFUL") and not HasAura("player", "Demon Skin", "HELPFUL") then
         Unlock(CastSpellByName, "Demon Armor")
         Unlock(CastSpellByName, "Demon Skin")
+        RandomizeNextCast()
         return
     end
 
     if not UnitExists("pet") then
         Unlock(CastSpellByName, "Summon Imp")
+        RandomizeNextCast()
         return
     end
 
@@ -101,6 +111,7 @@ local function tickRested()
     end
 
     Unlock(CastSpellByName, "Shadow Bolt")
+    RandomizeNextCast()
 end
 
 local function tickCombat()
@@ -118,16 +129,19 @@ local function tickCombat()
 
     if not HasAura("target", "Corruption", "HARMFUL|PLAYER") then
         Unlock(CastSpellByName, "Corruption")
+        RandomizeNextCast()
         return
     end
 
     if not HasAura("target", "Curse of Agony", "HARMFUL|PLAYER") then
         Unlock(CastSpellByName, "Curse of Agony")
+        RandomizeNextCast()
         return
     end
 
     if not HasAura("target", "Immolate", "HARMFUL|PLAYER") then
         Unlock(CastSpellByName, "Immolate")
+        RandomizeNextCast()
         return
     end
 
@@ -136,8 +150,10 @@ local function tickCombat()
     local manaPct = (manaMax > 0) and (mana / manaMax) * 100 or 100
     if manaPct < 15 then
         Unlock(CastSpellByName, "Shoot")
+        RandomizeNextCast()
     else
         Unlock(CastSpellByName, "Shadow Bolt")
+        RandomizeNextCast()
     end
     Unlock(CastSpellByName, "Attack")
 end

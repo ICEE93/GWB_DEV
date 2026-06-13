@@ -50,6 +50,14 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     return false -- do not consume
 end
 
+local lastAttackTime = 0
+local lastAttackTarget = nil
+
+local nextSpellCastTime = 0
+local function RandomizeNextCast()
+    nextSpellCastTime = GetTime() + (0.15 + math.random() * 0.4)
+end
+
 local function ShouldNotCast()
     -- not alrdy casting or moving?
     if UnitCastingInfo("player") ~= nil then
@@ -62,14 +70,14 @@ local function ShouldNotCast()
     if curr ~= 0 then
         return true -- moving
     end
+    if GetTime() < nextSpellCastTime then
+        return true -- humanization delay
+    end
     return false
 end
 local function ShouldCast()
     return not ShouldNotCast()
 end
-
-local lastAttackTime = 0
-local lastAttackTarget = nil
 
 local function tickRested()
     if not GWB.Map:IsRunning() then return end
@@ -96,8 +104,10 @@ local function tickRested()
 
     if cp >= 2 and energy >= 35 then
         Unlock(CastSpellByName, "Eviscerate")
+        RandomizeNextCast()
     elseif energy >= 40 then
         Unlock(CastSpellByName, "Sinister Strike")
+        RandomizeNextCast()
     end
 end
 local function tickCombat()
@@ -118,8 +128,10 @@ local function tickCombat()
 
     if cp >= 2 and energy >= 35 then
         Unlock(CastSpellByName, "Eviscerate")
+        RandomizeNextCast()
     elseif energy >= 40 then
         Unlock(CastSpellByName, "Sinister Strike")
+        RandomizeNextCast()
     end
 end
 
