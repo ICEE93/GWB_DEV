@@ -3,7 +3,6 @@ local Nn, GWB, StorageMgr = ...
 GWB.StorageMgr = {}
 
 function GWB.StorageMgr:SaveStorageToDisk()
-    GWB:Debug("Creating new Storage obj...")
     if not GWB.Storage then GWB.Storage = {} end
     local str = Nn.Utils.JSON.encode(GWB.Storage)
     local path = GWB.StorageMgr:GenerateStoragePath()
@@ -29,9 +28,7 @@ function GWB.StorageMgr:SaveStorageToDisk()
         success, err = pcall(WriteFile, path, str, false)
     end
     
-    if success then
-        GWB:Debug("Storage saved to " .. path)
-    else
+    if not success then
         GWB:Print("Failed to write config: " .. tostring(err))
     end
 end

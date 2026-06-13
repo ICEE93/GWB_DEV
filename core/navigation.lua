@@ -77,15 +77,6 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     Nn.EZ.Nav.GeneratePath(px, py, pz, jx, jy, z, function(path)
         isGenerating = false
         if path and type(path) == "table" and #path > 1 then
-            -- Jitter path and trim nodes behind us
-            for i = 2, #path do
-                if i < #path then
-                    -- Circular node jittering instead of exact coordinate
-                    path[i].x = path[i].x + (math.random() * 2.5 - 1.25)
-                    path[i].y = path[i].y + (math.random() * 2.5 - 1.25)
-                end
-            end
-            
             -- Trim nodes that we are already past
             while #path > 2 do
                 local node = path[2]
