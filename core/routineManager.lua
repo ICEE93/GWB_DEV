@@ -175,6 +175,26 @@ recordCallbacks.OnGossipStart = function()
     end)
 end
 
+local function RecordQuestNpcInteract()
+    if not activeSession then return end
+    local px, py, pz = ObjectPosition("player")
+    local mapId = C_Map.GetBestMapForUnit("player")
+    local npcObj = GetInteractObj()
+    local npcId   = GetObjId(npcObj)
+    local npcName = npcObj and ObjectName(npcObj) or "Unknown"
+    
+    AddStep("npc_interact", {
+        npcId      = npcId,
+        npcName    = npcName,
+        x = px, y = py, z = pz,
+        mapId      = mapId,
+        gossipOpts = {}, -- Quest dialogs don't have gossip options
+    })
+end
+
+recordCallbacks.OnNewQuestAvailable = RecordQuestNpcInteract
+recordCallbacks.OnQuestTurninStarted = RecordQuestNpcInteract
+
 recordCallbacks.OnNewQuestStarted = function(_, questId)
     if not activeSession then return end
     local questName = C_QuestLog.GetTitleForQuestID and C_QuestLog.GetTitleForQuestID(questId) or ("Quest " .. tostring(questId))

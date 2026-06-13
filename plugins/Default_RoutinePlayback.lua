@@ -179,6 +179,37 @@ local function ExecNPCInteract(step)
     end, 4.5)
 end
 
+local function InteractClosestNpc(step)
+    local px, py, pz = ObjectPosition("player")
+    if not px then return false end
+    local distToStep = math.sqrt((step.x-px)^2 + (step.y-py)^2 + (step.z-pz)^2)
+    if distToStep > 5.0 then return false end -- too far, keep walking
+
+    local npcs = ObjectManager(5) or {}
+    local closest = nil
+    local minDist = 999
+    for i=1, #npcs do
+        local obj = npcs[i]
+        if ObjectExists(obj) then
+            local cx, cy, cz = ObjectPosition(obj)
+            if cx then
+                local dist = math.sqrt((cx-px)^2 + (cy-py)^2 + (cz-pz)^2)
+                if dist < minDist then
+                    minDist = dist
+                    closest = obj
+                end
+            end
+        end
+    end
+
+    if closest and minDist < 6.0 then
+        ClickToMove(px, py, pz)
+        ObjectInteract(closest)
+        return true
+    end
+    return false
+end
+
 local function ExecQuestAccept(step)
     isWaiting = true
     questPending = "accept"
@@ -188,6 +219,8 @@ local function ExecQuestAccept(step)
         Nn.Unlock(AcceptQuest)
     else
         -- Walk to the NPC coords
+        if InteractClosestNpc(step) then return end
+
         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
             GWB.EZMover:MoveToXYZ(step.x, step.y, step.z)
         else
@@ -207,6 +240,8 @@ local function ExecQuestTurnin(step)
             Nn.Unlock(QuestFrameCompleteQuestButton.Click, QuestFrameCompleteQuestButton)
         end
     else
+        if InteractClosestNpc(step) then return end
+
         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
             GWB.EZMover:MoveToXYZ(step.x, step.y, step.z)
         else
