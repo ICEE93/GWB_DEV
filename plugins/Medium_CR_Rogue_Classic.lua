@@ -91,7 +91,14 @@ local function tickRested()
 
     if not ShouldCast() then return end
 
-    Unlock(CastSpellByName, "Sinister Strike")
+    local energy = UnitPower("player", 3)
+    local cp = GetComboPoints("player", "target")
+
+    if cp >= 2 and energy >= 35 then
+        Unlock(CastSpellByName, "Eviscerate")
+    elseif energy >= 40 then
+        Unlock(CastSpellByName, "Sinister Strike")
+    end
 end
 local function tickCombat()
     if not GWB.Map:IsRunning() then return end
@@ -106,8 +113,14 @@ local function tickCombat()
 
     if not ShouldCast() then return end
 
-    Unlock(CastSpellByName, "Sinister Strike")
-    Unlock(CastSpellByName, "Eviscerate")
+    local energy = UnitPower("player", 3)
+    local cp = GetComboPoints("player", "target")
+
+    if cp >= 2 and energy >= 35 then
+        Unlock(CastSpellByName, "Eviscerate")
+    elseif energy >= 40 then
+        Unlock(CastSpellByName, "Sinister Strike")
+    end
 end
 
 

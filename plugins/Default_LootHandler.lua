@@ -84,10 +84,12 @@ local function tickPostCombat()
             if cx then
                 local dx, dy, dz = cx-px, cy-py, cz-pz
                 local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                if dist < 5.0 then
-                    lastLootingCorpse = nearbyCorpses
-                    ClickToMove(px, py, pz)
-                    ObjectInteract(nearbyCorpses)
+                if dist < 4.5 then
+                    if lastLootingCorpse ~= nearbyCorpses or (GetTime() - (GWB.lastLootInteractTime or 0) > 2) then
+                        lastLootingCorpse = nearbyCorpses
+                        GWB.lastLootInteractTime = GetTime()
+                        ObjectInteract(nearbyCorpses)
+                    end
                     return
                 end
             end
@@ -197,8 +199,8 @@ plugin.callbacks.OnMovementFinished = function(ctx, type, ...)
         local targetObject = ...
         if targetObject == lastLootingCorpse then
             GWB:Debug("LootHandler, OnMovementFinished true!")
+            GWB.lastLootInteractTime = GetTime()
             ObjectInteract(lastLootingCorpse)
-            C_Timer.After(0.5, function() ObjectInteract(lastLootingCorpse) end)
             return true
         end
     end
