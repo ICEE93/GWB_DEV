@@ -11,6 +11,9 @@ end
 if GWB.Settings.QuestieAutopilot == nil then
     GWB.Settings.QuestieAutopilot = false
 end
+if GWB.Settings.DebugWhiskers == nil then
+    GWB.Settings.DebugWhiskers = false
+end
 
 local configFrame = CreateFrame("Frame", "GWBConfigFrame", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(480, 500)
@@ -35,6 +38,7 @@ function GWB:SaveSettings()
     GWB.Storage.Settings.Core.ActiveProfile = GWB.Settings.ActiveProfile
     GWB.Storage.Settings.Core.QuestieAutopilot = GWB.Settings.QuestieAutopilot
     GWB.Storage.Settings.Core.AutopilotProvider = GWB.Settings.AutopilotProvider
+    GWB.Storage.Settings.Core.DebugWhiskers = GWB.Settings.DebugWhiskers
 
     for pluginName, plugin in pairs(GWB.plugins) do
         if plugin.settings then
@@ -65,6 +69,9 @@ function GWB:LoadSettings()
         end
         if GWB.Storage.Settings.Core.AutopilotProvider ~= nil then
             GWB.Settings.AutopilotProvider = GWB.Storage.Settings.Core.AutopilotProvider
+        end
+        if GWB.Storage.Settings.Core.DebugWhiskers ~= nil then
+            GWB.Settings.DebugWhiskers = GWB.Storage.Settings.Core.DebugWhiskers
         end
     end
 
@@ -140,6 +147,19 @@ function GWB:RebuildConfigUI()
         end
         GWB:SaveSettings()
         print("GWB: Set Autopilot to " .. tostring(GWB.Settings.QuestieAutopilot))
+    end)
+    yOffset = yOffset - 30
+
+    local cbWhiskers = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+    cbWhiskers:SetSize(24, 24)
+    cbWhiskers:SetPoint("TOPLEFT", 20, yOffset)
+    cbWhiskers:SetChecked(GWB.Settings.DebugWhiskers)
+    local cbWhiskersText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    cbWhiskersText:SetPoint("LEFT", cbWhiskers, "RIGHT", 5, 1)
+    cbWhiskersText:SetText("Show Navigation Rays (Debug)")
+    cbWhiskers:SetScript("OnClick", function(self)
+        GWB.Settings.DebugWhiskers = self:GetChecked()
+        GWB:SaveSettings()
     end)
     yOffset = yOffset - 30
 

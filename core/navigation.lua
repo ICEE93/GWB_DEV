@@ -162,6 +162,22 @@ local lastWhiskerAngle = nil
 local lastWhiskerTime = 0
 local lastMovementSpeed = 0
 
+local debugRaysFrame = CreateFrame("Frame", "GWB_DebugRays", UIParent)
+debugRaysFrame:SetAllPoints()
+local debugLines = {}
+local function GetDebugLine(index)
+    if not debugLines[index] then
+        debugLines[index] = debugRaysFrame:CreateLine()
+        debugLines[index]:SetThickness(2)
+    end
+    return debugLines[index]
+end
+local function HideDebugLines(fromIndex)
+    for i = fromIndex, #debugLines do
+        debugLines[i]:Hide()
+    end
+end
+
 local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
     local finalX, finalY, finalZ = wx, wy, wz
     local tLine = TraceLine or (Nn and Nn.TraceLine)
@@ -231,6 +247,9 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         local numRays = 32  -- Increased from 16 to 32 for finer angular resolution
         local step = (math.pi * 2) / numRays
 
+        local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
+        local lineIndex = 1
+
         -- Check if current path is clear up to the destination (don't check past it!)
         local currentPathClear = true
         for _, rayLen in ipairs(rayLengths) do
@@ -239,6 +258,20 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 local cy = py + math.sin(yaw) * rayLen
                 local cz = pz + slopeZ * rayLen
                 local hit = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x100111)
+
+                if drawDebug then
+                    local sx1, sy1 = WorldToScreen(px, py, pz + 1.0)
+                    local sx2, sy2 = WorldToScreen(cx, cy, cz + 1.0)
+                    if sx1 and sx2 then
+                        local l = GetDebugLine(lineIndex)
+                        if hit then l:SetColorTexture(1, 0, 0, 0.8) else l:SetColorTexture(0, 1, 0, 0.8) end
+                        l:SetStartPoint("BOTTOMLEFT", sx1, sy1)
+                        l:SetEndPoint("BOTTOMLEFT", sx2, sy2)
+                        l:Show()
+                        lineIndex = lineIndex + 1
+                    end
+                end
+
                 if hit then
                     currentPathClear = false
                     break
@@ -253,6 +286,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 -- Keep current direction, no change needed
                 lastWhiskerAngle = yaw
                 lastWhiskerTime = now
+                HideDebugLines(lineIndex)
                 GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
                 return
             end
@@ -276,6 +310,19 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     local rz = pz + slopeZ * rayLen
                     local hit = tLine(px, py, pz + 1.0, rx, ry, rz + 1.0, 0x100111)
 
+                    if drawDebug then
+                        local sx1, sy1 = WorldToScreen(px, py, pz + 1.0)
+                        local sx2, sy2 = WorldToScreen(rx, ry, rz + 1.0)
+                        if sx1 and sx2 then
+                            local l = GetDebugLine(lineIndex)
+                            if hit then l:SetColorTexture(1, 0, 0, 0.5) else l:SetColorTexture(0, 1, 0, 0.5) end
+                            l:SetStartPoint("BOTTOMLEFT", sx1, sy1)
+                            l:SetEndPoint("BOTTOMLEFT", sx2, sy2)
+                            l:Show()
+                            lineIndex = lineIndex + 1
+                        end
+                    end
+
                     if not hit then
                         angleClearances[i] = angleClearances[i] + rayLen
                     else
@@ -290,6 +337,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
             -- Prefer angles with longer clearance
             angleScores[i] = angleScores[i] - angleClearances[i]
         end
+        
+        HideDebugLines(lineIndex)
 
         -- Find best angle considering goal direction and clearance
         local bestAngle = nil
