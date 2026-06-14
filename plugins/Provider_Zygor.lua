@@ -144,5 +144,31 @@ local function PluginInit()
     end
 end
 
+-- Zygor blocks step progression on 'buy'/'sell' steps until the Merchant window is closed.
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("MERCHANT_SHOW")
+eventFrame:SetScript("OnEvent", function(self, event)
+    if event == "MERCHANT_SHOW" then
+        if GWB.Settings and GWB.Settings.AutopilotProvider == "Zygor" then
+            if GWB.State and GWB.State:getCurrentState() == "plugin.Waypoints" then
+                -- Give ZGV 1.5 seconds to auto-buy/sell its items, then close it to advance the step
+                C_Timer.After(1.5, function()
+                    if MerchantFrame and MerchantFrame:IsVisible() then
+                        local unlock = Unlock or (Nn and Nn.Unlock)
+                        if unlock then
+                            unlock(CloseMerchant)
+                        else
+                            CloseMerchant()
+                        end
+                        if GWB.Settings.DebugZygor then
+                            GWB:Print("[Zygor Debug] Auto-closed Merchant window to advance Zygor step.")
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end)
+
 C_Timer.After(1.0, PluginInit)
 GWB:RegisterPlugin(plugin)
