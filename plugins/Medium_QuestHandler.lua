@@ -135,9 +135,6 @@ local function ScanNearbyObjectives()
     -- Don't scan if we are busy looting or in combat
     if GWB.isPostCombatLooting or UnitAffectingCombat("player") then return end
     
-    -- If Autopilot is active, let it handle objective navigation
-    if GWB.Settings.QuestieAutopilot then return end
-    
     -- If we already have a valid target and it hasn't timed out, verify it
     if GWB.QuestTarget then
         if GetTime() > questTargetTimeout then
@@ -306,29 +303,37 @@ dialogFrame:SetScript("OnEvent", function(self, event, ...)
     C_Timer.After(math.random(6, 12) / 10.0, function()
         if event == "GOSSIP_SHOW" then
             if not GossipFrame or not GossipFrame:IsShown() then return end
-            
-            local numActive = GetNumGossipActiveQuests() or 0
+
+            local numActive = 0
+            if type(GetNumGossipActiveQuests) == "function" then
+                numActive = GetNumGossipActiveQuests() or 0
+            end
+
             if numActive > 0 then
                 GWB:Print("Autopilot: Selecting active gossip quest to turn in.")
                 if Nn.Unlock then
                     local cmd = "CLICK GossipTitleButton1:LeftButton"
                     Nn.Unlock(RunBinding, cmd)
                     Nn.Unlock(RunBinding, cmd, "up")
-                else 
-                    SelectGossipActiveQuest(1) 
+                else
+                    SelectGossipActiveQuest(1)
                 end
                 return
             end
-            
-            local numAvailable = GetNumGossipAvailableQuests() or 0
+
+            local numAvailable = 0
+            if type(GetNumGossipAvailableQuests) == "function" then
+                numAvailable = GetNumGossipAvailableQuests() or 0
+            end
+
             if numAvailable > 0 then
                 GWB:Print("Autopilot: Selecting available gossip quest to accept.")
-                if Nn.Unlock then 
+                if Nn.Unlock then
                     local cmd = "CLICK GossipTitleButton1:LeftButton"
                     Nn.Unlock(RunBinding, cmd)
                     Nn.Unlock(RunBinding, cmd, "up")
-                else 
-                    SelectGossipAvailableQuest(1) 
+                else
+                    SelectGossipAvailableQuest(1)
                 end
                 return
             end
