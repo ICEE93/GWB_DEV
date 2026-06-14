@@ -371,9 +371,12 @@ function _tickTest()
                 
                 -- Interaction range is usually 5 yards. Using 5.0 to be safe.
                 if dist2D < 5.0 then
+                    local isCasting = UnitCastingInfo and UnitCastingInfo("player")
+                    local isChanneling = UnitChannelInfo and UnitChannelInfo("player")
+                    
                     -- Debounce interaction so we don't spam stop/interact every tick
                     local now = GetTime()
-                    if now - (GWB.lastQuestieInteractTime or 0) > 2.0 then
+                    if not isCasting and not isChanneling and now - (GWB.lastQuestieInteractTime or 0) > 2.0 then
                         -- Stop moving
                         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
                             if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end

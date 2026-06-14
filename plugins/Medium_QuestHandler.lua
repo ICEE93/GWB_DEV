@@ -154,8 +154,17 @@ local function ScanNearbyObjectives()
                     if dist < 5.0 then
                         -- Stop moving and interact
                         ClickToMove(px, py, pz)
-                        ObjectInteract(GWB.QuestTarget)
-                        questTargetTimeout = GetTime() + 5 -- give it 5s to finish interacting
+                        
+                        local isCasting = UnitCastingInfo and UnitCastingInfo("player")
+                        local isChanneling = UnitChannelInfo and UnitChannelInfo("player")
+                        
+                        local now = GetTime()
+                        if not isCasting and not isChanneling and now - (GWB.lastQuestInteractTime or 0) > 1.5 then
+                            ObjectInteract(GWB.QuestTarget)
+                            GWB.lastQuestInteractTime = now
+                        end
+                        
+                        questTargetTimeout = now + 5 -- give it 5s to finish interacting
                     else
                         -- Keep moving towards it
                         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
