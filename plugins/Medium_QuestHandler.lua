@@ -316,6 +316,8 @@ local function IsQuestLogFull()
     return count >= maxQuests
 end
 
+GWB.QuestHandler.BlacklistedPins = GWB.QuestHandler.BlacklistedPins or {}
+
 GWB.QuestHandler.GetNextQuestieWaypoint = function()
     local now = GetTime()
     local px, py, pz = ObjectPosition("player")
@@ -345,99 +347,75 @@ GWB.QuestHandler.GetNextQuestieWaypoint = function()
         return nil
     end
 
-    local bestCompleteLocal = nil
-    local bestAvailableLocal = nil
-    local bestActiveLocal = nil
-    local bestAny = nil
-
-    local distCompleteLocal = 999999
-    local distAvailableLocal = 999999
-    local distActiveLocal = 999999
-    local scoreAny = 9999999
-
+    local bestPin = nil
+    local bestScore = 9999999
     local MAX_LOCAL_DIST = 500.0
-    local MAX_COMPLETE_DIST = 2000.0  -- Complete quests can be much further away
+    local MAX_COMPLETE_DIST = 2000.0
     local logFull = IsQuestLogFull()
+    local playerLevel = UnitLevel("player") or 1
 
     for i = 1, #pins do
         local pin = pins[i]
-        local wx, wy, wz = GetWorldCoordsFromMap(pin.uiMapID, pin.x, pin.y)
-        if wx then
-            local dist = math.sqrt((wx-px)^2 + (wy-py)^2 + (wz-pz)^2)
-            pin.wx, pin.wy, pin.wz = wx, wy, wz
+        
+        -- Blacklist check
+        local pinId = tostring(pin.questId) .. "_" .. tostring(pin.x) .. "_" .. tostring(pin.y)
+        if GWB.QuestHandler.BlacklistedPins[pinId] then
+            if now < GWB.QuestHandler.BlacklistedPins[pinId] then
+                -- Skip blacklisted pin
+            else
+                -- Expire blacklist
+                GWB.QuestHandler.BlacklistedPins[pinId] = nil
+            end
+        end
 
-            if pin.type == "complete" and dist < MAX_COMPLETE_DIST and dist < distCompleteLocal then
-                bestCompleteLocal = pin
-                distCompleteLocal = dist
-            elseif pin.type == "active" and dist < MAX_LOCAL_DIST and dist < distActiveLocal then
-                -- Skip quests significantly above player level (more than 2 levels above)
-                local playerLevel = UnitLevel("player") or 1
-                local pinLevel = pin.level or playerLevel
-                if pinLevel <= playerLevel + 2 then
-                    bestActiveLocal = pin
-                    distActiveLocal = dist
+        if not GWB.QuestHandler.BlacklistedPins[pinId] then
+            local wx, wy, wz = GetWorldCoordsFromMap(pin.uiMapID, pin.x, pin.y)
+            if wx then
+                local dist = math.sqrt((wx-px)^2 + (wy-py)^2 + (wz-pz)^2)
+                pin.wx, pin.wy, pin.wz = wx, wy, wz
+                
+                local isValid = false
+                if pin.type == "complete" and dist < MAX_COMPLETE_DIST then isValid = true end
+                if pin.type == "active" and dist < MAX_LOCAL_DIST then isValid = true end
+                if pin.type == "available" and not logFull and dist < MAX_LOCAL_DIST then isValid = true end
+                
+                if isValid then
+                    local pinLevel = pin.level or playerLevel
+                    local levelPenalty = 0
+                    
+                    -- Penalize quests that are too high level
+                    if pinLevel > playerLevel + 2 then
+                        levelPenalty = (pinLevel - playerLevel) * 100
+                    end
+                    levelPenalty = levelPenalty + (pinLevel * 0.5)
+
+                    -- Priority base points
+                    local priorityBonus = 0
+                    if pin.type == "active" then priorityBonus = 0 end
+                    if pin.type == "complete" then priorityBonus = -1000 end  -- Strongly prefer completing quests
+                    if pin.type == "available" then priorityBonus = 500 end -- available are last resort
+                    
+                    -- Stick to the same quest bonus!
+                    if GWB.QuestHandler.LastActiveQuestId and pin.questId == GWB.QuestHandler.LastActiveQuestId then
+                        priorityBonus = priorityBonus - 150
+                    end
+
+                    local score = dist + levelPenalty + priorityBonus
+
+                    if score < bestScore then
+                        bestPin = pin
+                        bestScore = score
+                    end
                 end
-            elseif pin.type == "available" and not logFull and dist < MAX_LOCAL_DIST and dist < distAvailableLocal then
-                -- Skip quests significantly above player level (more than 2 levels above)
-                local playerLevel = UnitLevel("player") or 1
-                local pinLevel = pin.level or playerLevel
-                if pinLevel <= playerLevel + 2 then
-                    bestAvailableLocal = pin
-                    distAvailableLocal = dist
-                end
-            end
-
-            local ignoreAny = false
-            if pin.type == "available" and logFull then
-                ignoreAny = true
-            end
-
-            -- Score: Distance is the PRIMARY factor - closest quests should always be prioritized
-            -- Only use quest type and level as minor tiebreakers for similar distances
-            local playerLevel = UnitLevel("player") or 1
-            local pinLevel = pin.level or playerLevel
-            local levelPenalty = 0
-
-            -- Penalize quests that are too high level, but not so much that it overrides distance
-            if pinLevel > playerLevel + 2 then
-                levelPenalty = (pinLevel - playerLevel) * 100
-            end
-
-            -- Very minor tiebreaker: prefer lower level quests if distances are similar
-            levelPenalty = levelPenalty + (pinLevel * 0.5)
-
-            -- Priority bonus: complete quests get highest priority, then active, then available
-            -- Distance is still the primary factor, but this breaks ties for similar distances
-            local priorityBonus = 0
-            if pin.type == "active" then priorityBonus = 10 end
-            if pin.type == "complete" then priorityBonus = -50 end  -- Strongly prefer completing quests
-            if pin.type == "available" then priorityBonus = 20 end
-
-            local score = dist + levelPenalty + priorityBonus
-
-            if not ignoreAny and score < scoreAny then
-                bestAny = pin
-                scoreAny = score
             end
         end
     end
 
-    -- Prioritize active quests first, then complete quests, then available quests
-    if bestActiveLocal then
-        GWB.QuestHandler.CurrentAutopilotPin = bestActiveLocal
-        return bestActiveLocal
+    GWB.QuestHandler.CurrentAutopilotPin = bestPin
+    if bestPin and bestPin.type == "active" then
+        GWB.QuestHandler.LastActiveQuestId = bestPin.questId
     end
-    if bestCompleteLocal then
-        GWB.QuestHandler.CurrentAutopilotPin = bestCompleteLocal
-        return bestCompleteLocal
-    end
-    if bestAvailableLocal then
-        GWB.QuestHandler.CurrentAutopilotPin = bestAvailableLocal
-        return bestAvailableLocal
-    end
-
-    GWB.QuestHandler.CurrentAutopilotPin = bestAny
-    return bestAny
+    return bestPin
 end
 
 -- Scans nearby units/objects to see if their tooltip matches an active objective

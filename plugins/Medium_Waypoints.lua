@@ -379,11 +379,20 @@ function _tickTest()
                 GWB.Mover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
             end
         else
-            -- We reached the coordinate but NPC isn't here yet, stop and wait
+            -- We reached the coordinate but NPC isn't here yet. Blacklist this pin for 120s and move on!
             if GWB.Settings.UseEZNavSafe and GWB.EZMover then
                 if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
             end
-            ClickToMove(px, py, pz)
+            
+            if pin.type == "active" and pin.questId and pin.x and pin.y then
+                if not GWB.QuestHandler.BlacklistedPins then GWB.QuestHandler.BlacklistedPins = {} end
+                local pinId = tostring(pin.questId) .. "_" .. tostring(pin.x) .. "_" .. tostring(pin.y)
+                GWB.QuestHandler.BlacklistedPins[pinId] = GetTime() + 120.0
+                GWB.QuestHandler.CurrentAutopilotPin = nil
+                GWB:Debug("Pin empty! Roaming to next pin...")
+            else
+                ClickToMove(px, py, pz)
+            end
         end
 
         -- Check if there are nearby mobs to engage (if we are near an objective)
