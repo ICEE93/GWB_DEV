@@ -237,9 +237,14 @@ local function GetQuestiePins()
                     
                     local questLevel = (questData and (questData.Level or questData.level)) or data.Level or data.level or 99
 
+                    local pinType = data.Type
+                    if pinType == "monster" or pinType == "object" or pinType == "item" or pinType == "event" then
+                        pinType = "active"
+                    end
+
                     table.insert(pins, {
                         questId = questId,
-                        type = data.Type, -- "available", "complete", "active"
+                        type = pinType, -- "available", "complete", "active"
                         name = data.Name,
                         id = targetId or data.Id,
                         targetType = targetType,
@@ -264,8 +269,21 @@ local function GetQuestiePins()
 end
 
 local function IsQuestLogFull()
+    -- Dynamically check quest limit for Midnight/Retail
+    local maxQuests = 20
+    if C_QuestLog and C_QuestLog.GetMaxNumQuestsCanAccept then
+        maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept()
+    elseif C_QuestLog then
+        maxQuests = 35 -- Safe default for modern WoW
+    end
+
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries then
+        local numQuests = C_QuestLog.GetNumQuestLogEntries()
+        return numQuests >= maxQuests
+    end
+
     local numEntries, numQuests = GetNumQuestLogEntries and GetNumQuestLogEntries()
-    if numQuests then return numQuests >= 20 end
+    if numQuests then return numQuests >= maxQuests end
     if not numEntries then return false end
     
     local count = 0
@@ -273,7 +291,7 @@ local function IsQuestLogFull()
         local _, _, _, isHeader = GetQuestLogTitle(i)
         if not isHeader then count = count + 1 end
     end
-    return count >= 20
+    return count >= maxQuests
 end
 
 GWB.QuestHandler.GetNextQuestieWaypoint = function()

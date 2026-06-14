@@ -3,6 +3,10 @@
 All notable changes to the Generic WoW Bot (GWB) project will be documented in this file.
 
 ## [Unreleased]
+- **Navigation:** Restored the whisker-based dynamic steering (`ClickToMoveWithWhiskers`), but resolved conflicts by forcefully pausing whiskers while the `UnstuckHandler` is active. Increased the whisker fallback distance from 2.5 to 5.0 yards to prevent false stuck triggers caused by micro-stuttering.
+- **Core:** Added automatic `LoadSettings` invocation via `init.lua` to ensure Autopilot toggle correctly synchronizes from saved settings without opening the UI manually.
+- **QuestHandler:** Normalized internal Questie active objectives (`"monster"`, `"object"`, etc.) to `"active"`, ensuring Autopilot correctly assigns them navigation priority instead of ignoring them.
+- **QuestHandler:** Dynamically calculate the maximum quest log limit using `C_QuestLog.GetMaxNumQuestsCanAccept()`, fixing a bug on the Midnight (12.0) client where the bot thought the log was full at 20 quests and stubbornly ignored all new quest pickups.
 - **QuestHandler:** Implemented Target Isolation for Questie Autopilot pins. The bot will now aggressively ignore hostile mobs that belong to quests other than its active Autopilot pin.
 - **QuestHandler:** Fixed a 1-frame race condition where targeting systems would latch onto nearby mobs before the Autopilot pin could calculate during UI reload.
 - **QuestHandler:** Redesigned Autopilot scoring algorithm to prioritize active local quests regardless of level difference, preventing unwanted cross-zone navigation.

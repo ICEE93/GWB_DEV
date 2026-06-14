@@ -105,3 +105,11 @@ for k, v in pairs(GWB.Modules.modules) do
 end
 
 _G.GWB = GWB
+
+-- Pre-load settings on initialization so saved variables like Autopilot apply immediately
+C_Timer.After(1.0, function()
+    if GWB.LoadSettings then
+        GWB:LoadSettings()
+        GWB:Print("Settings loaded from storage.")
+    end
+end)

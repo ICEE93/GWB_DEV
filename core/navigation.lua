@@ -337,8 +337,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         end
 
         if bestAngle then
-            finalX = px + math.cos(bestAngle) * 2.5
-            finalY = py + math.sin(bestAngle) * 2.5
+            finalX = px + math.cos(bestAngle) * 5.0
+            finalY = py + math.sin(bestAngle) * 5.0
             finalZ = pz
             lastWhiskerAngle = bestAngle
             lastWhiskerTime = now
@@ -440,7 +440,14 @@ local function EZMoverTick()
                 C_Timer.After(0.5, function() Unlock(AscendStop) end)
             end
         end
-        ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z)
+        
+        -- Disable whiskers if UnstuckHandler is performing maneuvers to prevent fighting
+        local isUnstuck = GWB.State and GWB.State:getCurrentState() == "plugin.UnstuckHandler"
+        if isUnstuck then
+            GWB.EZMover:ClickToMoveSafeZ(wp.x, wp.y, wp.z)
+        else
+            ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z)
+        end
     end
 end
 
