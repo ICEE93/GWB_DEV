@@ -38,8 +38,20 @@ function ZygorProvider.IsObjective(obj)
         return false, nil
     end
 
-    local unitId = Nn.ObjectUnitId and Nn.ObjectUnitId(obj) or ObjectUnitId(obj)
-    local objectId = Nn.ObjectId and Nn.ObjectId(obj) or ObjectId(obj)
+    local unitId = nil
+    if type(ObjectUnitId) == "function" then
+        unitId = ObjectUnitId(obj)
+    elseif Nn and type(Nn.ObjectUnitId) == "function" then
+        unitId = Nn.ObjectUnitId(obj)
+    end
+
+    local objectId = nil
+    if type(ObjectId) == "function" then
+        objectId = ObjectId(obj)
+    elseif Nn and type(Nn.ObjectId) == "function" then
+        objectId = Nn.ObjectId(obj)
+    end
+
     local targetId = unitId or objectId
 
     if not targetId then return false, nil end
