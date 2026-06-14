@@ -724,6 +724,13 @@ local function ShouldVendor(itemID, quality)
     -- Always sell poor (grey) items regardless of if we looted them
     if quality == 0 then return true end
 
+    -- Prevent selling valuable auction house items
+    local itemName, _, _, _, _, _, _, _, _, _, _, classID = GetItemInfo(itemID)
+    if classID then
+        if classID == 7 then return false end -- Trade Goods (Herbs, Ore, Cloth, Skins, etc.)
+        if classID == 9 then return false end -- Recipes
+    end
+
     local count = GWB.Inv.currentItems[tostring(itemID)]
     if count == nil then return false end
     return true -- Sell all of it if it was collected by us
