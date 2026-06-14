@@ -442,6 +442,9 @@ function Nav.GetClosestPolygon(tile, x, y, z)
     local bestPoly = nil
     local minDist = 999999
     
+    -- If z is nil, fallback to 0
+    z = z or 0
+    
     for i = 0, tile.header.polyCount - 1 do
         local p = tile.polys[i]
         if p and p.polyType == 0 and p.area ~= 0 and #p.verts >= 3 then
@@ -452,7 +455,11 @@ function Nav.GetClosestPolygon(tile, x, y, z)
             local dx = cx - x
             local dy = cy - y
             local dz = cz - z
-            local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+            
+            -- Heavily favor 2D distance, but keep Z as a tie-breaker for multi-level terrain
+            -- This allows finding polygons on top of mountains even if Z is off by 500+ yards.
+            local dist2D = math.sqrt(dx*dx + dy*dy)
+            local dist = dist2D + (math.abs(dz) * 0.01)
             
             if dist < minDist then
                 minDist = dist
@@ -461,7 +468,8 @@ function Nav.GetClosestPolygon(tile, x, y, z)
         end
     end
     
-    if minDist < 50.0 then
+    -- Check if we found a polygon reasonably close in 2D space (ignore huge Z discrepancies)
+    if minDist < 100.0 then
         return bestPoly
     end
     return nil
