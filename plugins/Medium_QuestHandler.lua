@@ -407,12 +407,10 @@ GWB.QuestHandler.GetNextQuestieWaypoint = function()
                 local dist = math.sqrt((wx-px)^2 + (wy-py)^2 + (wz-pz)^2)
                 pin.wx, pin.wy, pin.wz = wx, wy, wz
                 
-                local isValid = false
-                if pin.type == "complete" and dist < MAX_COMPLETE_DIST then isValid = true end
-                if pin.type == "active" and dist < MAX_LOCAL_DIST then isValid = true end
-                if pin.type == "available" and not logFull and dist < MAX_LOCAL_DIST then isValid = true end
+                local ignorePin = false
+                if pin.type == "available" and logFull then ignorePin = true end
                 
-                if isValid then
+                if not ignorePin then
                     local pinLevel = pin.level or playerLevel
                     local levelPenalty = 0
                     
