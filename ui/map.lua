@@ -285,26 +285,25 @@ function GWB:OnBotScanTick(losCheck)
             local rawDist = Distance(px, py, 0, x, y, 0)
             
             if rawDist < 35.0 then -- Max search radius
-                local isQuestieMob = true
-                local inAggroRange = rawDist < 20.0
+                local isQuestMob = true
 
-                if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsObjective) then
+                -- Use provider-based objective checking when autopilot is enabled
+                if GWB.Settings.QuestieAutopilot or (GWB.Settings and GWB.Settings.AutopilotProvider) then
                     if GWB.QuestHandler and GWB.QuestHandler.IsObjective then
-                        isQuestieMob = GWB.QuestHandler:IsObjective(o)
-                        if not isQuestieMob then
+                        isQuestMob = GWB.QuestHandler:IsObjective(o)
+                        if not isQuestMob then
                             if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
-                                GWB:Debug("[QuestFilter] Skipping non-quest mob in aggro range:", ObjectName(o))
+                                GWB:Debug("[QuestFilter] Skipping non-quest mob:", ObjectName(o))
                                 GWB.lastQuestFilterLog = GetTime()
                             end
                         end
                     else
-                        if GWB.Settings.QuestieAutopilot then
-                            isQuestieMob = false
-                        end
+                        -- If no provider available, skip to be safe
+                        isQuestMob = false
                     end
                 end
 
-                if isQuestieMob then
+                if isQuestMob then
                     local diffZ = pz - z
                     local badHeight = diffZ > 30 or diffZ < -30
                     if not badHeight then
@@ -375,6 +374,20 @@ local function OnStartStopToggle()
         GWB.Map:SetIsRunning(true)
 
         btnStartToggle:SetText("Stop")
+
+        -- Restart all tickers that were stopped
+        if GWB.tickers then
+            for tickerName, _ in pairs(GWB.tickers) do
+                GWB:TickerSetState(tickerName, true)
+            end
+        end
+
+        -- Clear any stuck states
+        if GWB.QuestHandler then
+            GWB.QuestHandler.CurrentAutopilotPin = nil
+            GWB.QuestHandler.lastWaypointUpdate = 0
+        end
+
         local x, y, z = ObjectPosition("player")
         if x then ClickToMove(x, y, z) end
     else

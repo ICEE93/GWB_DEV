@@ -8,6 +8,11 @@ local plugin = {
 
 local ZygorProvider = {}
 
+-- Track alternative coordinates for cycling
+local altCoordsIndex = 0
+local altCoordsList = {}
+local lastAltCoordsUpdate = 0
+
 local function MapPosToWorldPos(mapID, x, y)
     local mapPos = CreateVector2D(x, y)
     local ret1, ret2 = C_Map.GetWorldPosFromMapPos(mapID, mapPos)
@@ -27,21 +32,93 @@ function ZygorProvider.GetNextWaypoint()
 
     if wp and wp.x and wp.y and wp.m then
         if debugZ then GWB:Print("[Zygor Debug] Waypoint coords:", wp.m, wp.x, wp.y) end
-        
+
+        -- Check for alternative coordinates in Zygor step data
+        local now = GetTime()
+        local hasAltCoords = false
+
+        if ZGV.CurrentStep and ZGV.CurrentStep.goals then
+            altCoordsList = {}
+            for i, goal in ipairs(ZGV.CurrentStep.goals) do
+                -- Zygor stores alternative coords in goal.alt_coords or similar
+                if goal.alt_coords and type(goal.alt_coords) == "table" then
+                    for _, altCoord in ipairs(goal.alt_coords) do
+                        if altCoord.x and altCoord.y and altCoord.m then
+                            table.insert(altCoordsList, {
+                                x = altCoord.x,
+                                y = altCoord.y,
+                                m = altCoord.m
+                            })
+                            hasAltCoords = true
+                        end
+                    end
+                end
+                -- Also check for coords in goal.coords (some Zygor versions use this)
+                if goal.coords and type(goal.coords) == "table" then
+                    for _, coord in ipairs(goal.coords) do
+                        if coord.x and coord.y and coord.m then
+                            table.insert(altCoordsList, {
+                                x = coord.x,
+                                y = coord.y,
+                                m = coord.m
+                            })
+                            hasAltCoords = true
+                        end
+                    end
+                end
+            end
+        end
+
+        -- If we have alternative coordinates, cycle through them
+        if hasAltCoords and #altCoordsList > 0 then
+            -- Only advance index if 10 seconds have passed, allowing the bot time to walk there
+            if now - lastAltCoordsUpdate > 10.0 or altCoordsIndex == 0 then
+                altCoordsIndex = altCoordsIndex + 1
+                if altCoordsIndex > #altCoordsList then
+                    altCoordsIndex = 1
+                end
+                lastAltCoordsUpdate = now
+            end
+
+            -- Use current alternative coordinate (Do not modify wp directly to avoid corrupting Zygor's internal state)
+            local altCoord = altCoordsList[altCoordsIndex]
+            if altCoord then
+                if debugZ then GWB:Print("[Zygor Debug] Using alternative coordinate", altCoordsIndex, "of", #altCoordsList) end
+                
+                -- Create a local copy to map to world position
+                local altX = altCoord.x
+                local altY = altCoord.y
+                local altM = altCoord.m
+                
+                local wx, wy, wz = MapPosToWorldPos(altM, altX, altY)
+                if wx and wy then
+                    local p = { x = altX, y = altY, wx = wx, wy = wy, wz = wz, mapId = altM, score = 100 }
+                    -- (We continue with the normal NPC ID matching logic using this new point)
+                    wp_local_x = altX
+                    wp_local_y = altY
+                    wp_local_m = altM
+                end
+            end
+        end
+
+        local useX = wp_local_x or wp.x
+        local useY = wp_local_y or wp.y
+        local useM = wp_local_m or wp.m
+
         -- Zygor uses normalized coordinates (e.g., 0.45)
-        local wx, wy, wz = MapPosToWorldPos(wp.m, wp.x, wp.y)
+        local wx, wy, wz = MapPosToWorldPos(useM, useX, useY)
         if wx and wy then
-            local p = { x = wp.x, y = wp.y, wx = wx, wy = wy, wz = wz, mapId = wp.m, score = 100 }
-            
+            local p = { x = useX, y = useY, wx = wx, wy = wy, wz = wz, mapId = useM, score = 100 }
+
             -- If this step requires NPC interaction, map it to the engine's 'available' or 'complete' type
             if ZGV.CurrentStep and ZGV.CurrentStep.goals then
                 for i, goal in ipairs(ZGV.CurrentStep.goals) do
                     local action = goal.action
                     if debugZ then GWB:Print("[Zygor Debug] Goal", i, "Action:", tostring(action), "NPCID:", tostring(goal.npcid), "TargetID:", tostring(goal.targetid)) end
-                    
-                    if action == "talk" or action == "accept" or action == "turnin" or 
+
+                    if action == "talk" or action == "accept" or action == "turnin" or
                        action == "buy" or action == "sell" or action == "interact" then
-                        
+
                         p.type = "available"
                         local rawId = goal.npcid or goal.targetid
                         if rawId then
@@ -51,19 +128,19 @@ function ZygorProvider.GetNextWaypoint()
                                 p.id = tonumber(rawId)
                             end
                         end
-                        
+
                         if not p.id and goal.mobs and goal.mobs[1] then
                             p.id = tonumber(goal.mobs[1].id)
                         end
-                        
+
                         if p.id then
                             if debugZ then GWB:Print("[Zygor Debug] Matched interaction! Returning pin with ID:", p.id) end
-                            break 
+                            break
                         end
                     end
                 end
             end
-            
+
             if debugZ and not p.id then GWB:Print("[Zygor Debug] Returning pure coordinates. No NPC ID found.") end
             return p
         end

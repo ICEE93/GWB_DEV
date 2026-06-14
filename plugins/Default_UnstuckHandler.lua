@@ -16,7 +16,8 @@ GWB:RegisterTicker(tickerName, GWB.Mover.Tick)
 
 local lastStuckCoord = nil
 local stuckCounter = 0
-local MAX_STUCK_COUNT = 10 -- 10 ticks that is
+local MAX_STUCK_COUNT = 20 -- Increased from 10 to 20 for less aggressive unstuck detection
+local MIN_STUCK_DIST = 0.3 -- Reduced from 0.75 to 0.3 for more lenient stuck detection
 
 local unstuckX, unstuckY, unstuckZ = 0, 0, 0
 local prevX, prevY, prevZ = 0, 0, 0
@@ -143,14 +144,22 @@ plugin.callbacks.OnMovementFinished = function(ctx, type, x, y, z)
     if unstuckX~=x or unstuckY~=y or unstuckZ~=z then return end
 
     print("UNSTUCK DONE?")
-    GWB.Mover:MoveToXYZ(prevX, prevY, prevZ)
-    unstuckX = nil
-
+    unstuckX = 0
+    unstuckY = 0
+    unstuckZ = 0
 
     -- this is us! we moved away?!
     if GWB.State:getCurrentState() == "plugin.UnstuckHandler" then
         print("Taking out state from UnstuckHandler")
         GWB.State:returnState()
+        -- Resume original movement instead of moving backward
+        if prevX ~= 0 and prevY ~= 0 then
+            if GWB.Settings.UseEZNavSafe then
+                GWB.EZMover:MoveToXYZ(prevX, prevY, prevZ)
+            else
+                GWB.Mover:MoveToXYZ(prevX, prevY, prevZ)
+            end
+        end
     end
 end
 plugin.callbacks.OnMovementFailed = function(ctx, type, x, y, z)
@@ -189,18 +198,18 @@ local function tickStuckDetection()
     local coords = { GWB.Mover:GetPlayerPosition() }
 
     local dist = GWB.Utils:Distance(coords[1], coords[2], 0, lastStuckCoord[1], lastStuckCoord[2], 0)
-    if dist > 0.75 then
+    if dist > MIN_STUCK_DIST then
         -- not stuck, check again later
         ClearStuckTracker()
-        return 
+        return
     end
 
     -- we didn't progress enough?
-    if stuckCounter == MAX_STUCK_COUNT-3 then
+    if stuckCounter == MAX_STUCK_COUNT-5 then
         -- try jumping?
         Unlock(JumpOrAscendStart)
     end
-    if stuckCounter == MAX_STUCK_COUNT-1 then
+    if stuckCounter == MAX_STUCK_COUNT-3 then
         -- Try jumping while moving forward for low obstacles
         Unlock(JumpOrAscendStart)
         -- Also try moving slightly forward while jumping
@@ -218,52 +227,34 @@ local function tickStuckDetection()
         prevX, prevY, prevZ = GWB.Mover:GetTargetXYZ()
         GWB.Mover:Stop()
 
-        -- More human-like unstuck: try backing up first, then strafing
-        local unstuckAttempt = math.random(1, 3)
+        -- Simplified unstuck: only try forward movement, no backward/strafing
         local unstuckX, unstuckY, unstuckZ = coords[1], coords[2], coords[3]
 
-        if unstuckAttempt == 1 then
-            -- Back up 3-5 yards in opposite direction of target
-            local dx = prevX - coords[1]
-            local dy = prevY - coords[2]
-            local dist = math.sqrt(dx*dx + dy*dy)
-            if dist > 0.1 then
-                local backDist = math.random(3, 5)
-                unstuckX = coords[1] - (dx / dist) * backDist
-                unstuckY = coords[2] - (dy / dist) * backDist
-            else
-                -- Fallback to random small offset
-                local angle = math.random() * math.pi * 2
-                unstuckX = coords[1] + math.cos(angle) * 3
-                unstuckY = coords[2] + math.sin(angle) * 3
+        -- Unstuck: We respect the user's wish to generally move forward toward the target,
+        -- but we MUST apply an angle offset so we actually walk AROUND the obstacle (like a tree).
+        local dx = prevX - coords[1]
+        local dy = prevY - coords[2]
+        local dist = math.sqrt(dx*dx + dy*dy)
+        if dist > 0.1 then
+            -- Base forward direction
+            local baseAngle = math.atan2(dy, dx)
+            -- Apply a random angle offset between 30 and 90 degrees (left or right)
+            local offsetAngle = (math.random() * (math.pi/3)) + (math.pi/6)
+            if math.random() > 0.5 then
+                offsetAngle = -offsetAngle
             end
-        elseif unstuckAttempt == 2 then
-            -- Strafe left or right 3-5 yards
-            local dx = prevX - coords[1]
-            local dy = prevY - coords[2]
-            local dist = math.sqrt(dx*dx + dy*dy)
-            local strafeDist = math.random(3, 5)
-            if dist > 0.1 then
-                -- Perpendicular direction
-                local perpX = -dy / dist
-                local perpY = dx / dist
-                if math.random() > 0.5 then
-                    perpX, perpY = -perpX, -perpY
-                end
-                unstuckX = coords[1] + perpX * strafeDist
-                unstuckY = coords[2] + perpY * strafeDist
-            else
-                -- Fallback to random small offset
-                local angle = math.random() * math.pi * 2
-                unstuckX = coords[1] + math.cos(angle) * 3
-                unstuckY = coords[2] + math.sin(angle) * 3
-            end
+            
+            local finalAngle = baseAngle + offsetAngle
+            
+            -- Move forward-diagonally 3-5 yards
+            local forwardDist = math.random(3, 5)
+            unstuckX = coords[1] + math.cos(finalAngle) * forwardDist
+            unstuckY = coords[2] + math.sin(finalAngle) * forwardDist
         else
-            -- Random offset as last resort (smaller range to prevent spinning)
+            -- Fallback: try small random forward offset
             local angle = math.random() * math.pi * 2
-            local dist = math.random(3, 8)
-            unstuckX = coords[1] + math.cos(angle) * dist
-            unstuckY = coords[2] + math.sin(angle) * dist
+            unstuckX = coords[1] + math.cos(angle) * 3
+            unstuckY = coords[2] + math.sin(angle) * 3
         end
 
         unstuckZ = coords[3]
