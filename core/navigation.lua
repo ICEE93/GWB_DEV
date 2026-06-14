@@ -199,6 +199,11 @@ local function InitLibDraw()
 end
 
 local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
+    if UnitIsDeadOrGhost("player") then
+        GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
+        return
+    end
+
     local finalX, finalY, finalZ = wx, wy, wz
     local tLine = TraceLine or (Nn and Nn.TraceLine)
 
@@ -439,6 +444,22 @@ local function EZMoverTick()
         end
     end
     
+    -- Smooth the path by skipping intermediate waypoints if we have direct line of sight
+    local tLine = TraceLine or (Nn and Nn.TraceLine)
+    if tLine and ezPathIndex < #ezPath then
+        -- Check up to 5 waypoints ahead to skip jagged/unnecessary detours
+        local maxScan = math.min(#ezPath, ezPathIndex + 5)
+        for scanIdx = maxScan, ezPathIndex + 1, -1 do
+            local scanWp = ezPath[scanIdx]
+            -- Check Line of Sight at waist level (+1.0)
+            local hit = tLine(px, py, pz + 1.0, scanWp.x, scanWp.y, scanWp.z + 1.0, 0x100111)
+            if not hit then
+                ezPathIndex = scanIdx
+                break
+            end
+        end
+    end
+
     local wp = ezPath[ezPathIndex]
     if not wp then 
         ezPath = nil 
