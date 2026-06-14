@@ -323,7 +323,7 @@ function _tickTest()
             local foundTarget = nil
             for i = 1, #objects do
                 local obj = objects[i]
-                if ObjectExists(obj) and ObjectId(obj) == pin.id then
+                if ObjectExists(obj) and ObjectUnitId(obj) == pin.id then
                     foundTarget = obj
                     break
                 end

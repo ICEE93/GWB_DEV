@@ -285,7 +285,9 @@ local function ExecLootObject(step)
     local target = nil
     for i=1, #gameObjects do
         local o = gameObjects[i]
-        if ObjectExists(o) and ObjectId(o) == step.objectId then
+        local objId = ObjectId(o)
+        if ObjectType(o) == 5 then objId = ObjectUnitId(o) end
+        if ObjectExists(o) and objId == step.objectId then
             target = o
             break
         end
