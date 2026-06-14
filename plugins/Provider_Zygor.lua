@@ -27,7 +27,28 @@ function ZygorProvider.GetNextWaypoint()
         -- Zygor uses normalized coordinates (e.g., 0.45)
         local wx, wy, wz = MapPosToWorldPos(wp.m, wp.x, wp.y)
         if wx and wy then
-            return { x = wp.x, y = wp.y, wx = wx, wy = wy, wz = wz, mapId = wp.m, score = 100 }
+            local p = { x = wp.x, y = wp.y, wx = wx, wy = wy, wz = wz, mapId = wp.m, score = 100 }
+            
+            -- If this step requires NPC interaction, map it to the engine's 'available' or 'complete' type
+            if ZGV.CurrentStep and ZGV.CurrentStep.goals then
+                for _, goal in ipairs(ZGV.CurrentStep.goals) do
+                    local action = goal.action
+                    if action == "talk" or action == "accept" or action == "turnin" or 
+                       action == "buy" or action == "sell" or action == "interact" then
+                        
+                        p.type = "available"
+                        p.id = goal.npcid or goal.targetid
+                        
+                        if not p.id and goal.mobs and goal.mobs[1] then
+                            p.id = goal.mobs[1].id
+                        end
+                        
+                        if p.id then break end
+                    end
+                end
+            end
+            
+            return p
         end
     end
     return nil
