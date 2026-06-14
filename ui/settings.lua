@@ -147,17 +147,35 @@ function GWB:RebuildConfigUI()
     provText:SetPoint("TOPLEFT", 25, yOffset - 3)
     provText:SetText("Autopilot Provider")
 
-    local provEb = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
-    provEb:SetSize(100, 20)
-    provEb:SetPoint("TOPLEFT", 220, yOffset)
-    provEb:SetAutoFocus(false)
-    provEb:SetText(tostring(GWB.Settings.AutopilotProvider or "Questie"))
-    provEb:SetScript("OnEnterPressed", function(self)
-        self:ClearFocus()
-        local txt = self:GetText()
-        GWB.Settings.AutopilotProvider = txt
-        GWB:SaveSettings()
-        print("GWB: Set Autopilot Provider to: " .. txt)
+    local provDropdown = CreateFrame("Frame", "GWBProviderDD", scrollChild, "UIDropDownMenuTemplate")
+    provDropdown:SetPoint("TOPLEFT", 200, yOffset + 5)
+    UIDropDownMenu_SetWidth(provDropdown, 120)
+    UIDropDownMenu_SetText(provDropdown, tostring(GWB.Settings.AutopilotProvider or "Questie"))
+    
+    UIDropDownMenu_Initialize(provDropdown, function(self, level, menuList)
+        local info = UIDropDownMenu_CreateInfo()
+        
+        info.text = "Questie"
+        info.arg1 = "Questie"
+        info.func = function(self, arg1)
+            GWB.Settings.AutopilotProvider = arg1
+            UIDropDownMenu_SetText(provDropdown, arg1)
+            GWB:SaveSettings()
+            print("GWB: Set Autopilot Provider to: " .. arg1)
+        end
+        info.checked = (GWB.Settings.AutopilotProvider == "Questie")
+        UIDropDownMenu_AddButton(info)
+        
+        info.text = "Zygor"
+        info.arg1 = "Zygor"
+        info.func = function(self, arg1)
+            GWB.Settings.AutopilotProvider = arg1
+            UIDropDownMenu_SetText(provDropdown, arg1)
+            GWB:SaveSettings()
+            print("GWB: Set Autopilot Provider to: " .. arg1)
+        end
+        info.checked = (GWB.Settings.AutopilotProvider == "Zygor")
+        UIDropDownMenu_AddButton(info)
     end)
     yOffset = yOffset - 30
     
