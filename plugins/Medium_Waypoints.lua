@@ -326,9 +326,13 @@ function _tickTest()
             local foundTarget = nil
             for i = 1, #objects do
                 local obj = objects[i]
-                if ObjectExists(obj) and getUnitId and getUnitId(obj) == pin.id then
-                    foundTarget = obj
-                    break
+                if ObjectExists(obj) then
+                    local uId = getUnitId and getUnitId(obj)
+                    local oId = getObjId and getObjId(obj)
+                    if uId == pin.id or oId == pin.id then
+                        foundTarget = obj
+                        break
+                    end
                 end
             end
 
@@ -337,9 +341,13 @@ function _tickTest()
                 local gameObjs = ObjectManager(8) or {}
                 for i = 1, #gameObjs do
                     local obj = gameObjs[i]
-                    if ObjectExists(obj) and getObjId and getObjId(obj) == pin.id then
-                        foundTarget = obj
-                        break
+                    if ObjectExists(obj) then
+                        local uId = getUnitId and getUnitId(obj)
+                        local oId = getObjId and getObjId(obj)
+                        if uId == pin.id or oId == pin.id then
+                            foundTarget = obj
+                            break
+                        end
                     end
                 end
             end
