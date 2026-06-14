@@ -231,16 +231,18 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         local numRays = 32  -- Increased from 16 to 32 for finer angular resolution
         local step = (math.pi * 2) / numRays
 
-        -- Check if current path is clear at all lengths
+        -- Check if current path is clear up to the destination (don't check past it!)
         local currentPathClear = true
         for _, rayLen in ipairs(rayLengths) do
-            local cx = px + math.cos(yaw) * rayLen
-            local cy = py + math.sin(yaw) * rayLen
-            local cz = pz + slopeZ * rayLen
-            local hit = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x100111)
-            if hit then
-                currentPathClear = false
-                break
+            if rayLen <= dist2D + 0.5 then
+                local cx = px + math.cos(yaw) * rayLen
+                local cy = py + math.sin(yaw) * rayLen
+                local cz = pz + slopeZ * rayLen
+                local hit = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x100111)
+                if hit then
+                    currentPathClear = false
+                    break
+                end
             end
         end
 
@@ -265,19 +267,22 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
             angleScores[i] = 0
             angleClearances[i] = 0
 
-            -- Test each angle at multiple lengths
+            -- Test each angle at multiple lengths, up to a reasonable cap
             for _, rayLen in ipairs(rayLengths) do
-                local rx = px + math.cos(angle) * rayLen
-                local ry = py + math.sin(angle) * rayLen
-                local rz = pz + slopeZ * rayLen
-                local hit = tLine(px, py, pz + 1.0, rx, ry, rz + 1.0, 0x100111)
+                -- Don't penalize paths that hit walls past the actual destination
+                if rayLen <= math.max(dist2D + 1.0, 4.0) then
+                    local rx = px + math.cos(angle) * rayLen
+                    local ry = py + math.sin(angle) * rayLen
+                    local rz = pz + slopeZ * rayLen
+                    local hit = tLine(px, py, pz + 1.0, rx, ry, rz + 1.0, 0x100111)
 
-                if not hit then
-                    angleClearances[i] = angleClearances[i] + rayLen
-                else
-                    -- Penalize heavily if blocked at short range
-                    if rayLen == 2.0 then
-                        angleScores[i] = angleScores[i] + 100
+                    if not hit then
+                        angleClearances[i] = angleClearances[i] + rayLen
+                    else
+                        -- Penalize heavily if blocked at short range
+                        if rayLen == 1.5 or rayLen == 2.5 then
+                            angleScores[i] = angleScores[i] + 100
+                        end
                     end
                 end
             end
@@ -294,7 +299,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
             local angle = i * step
             local diffToGoal = math.abs((angle - yaw + math.pi) % (math.pi * 2) - math.pi)
 
-            local score = angleScores[i] + diffToGoal
+            -- HEAVILY penalize turning away from the goal (e.g. running backwards down a hallway)
+            local score = angleScores[i] + (diffToGoal * 15.0)
 
             -- Bonus for angles similar to last chosen direction (momentum)
             if lastWhiskerAngle then
