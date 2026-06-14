@@ -164,8 +164,14 @@ function ZygorProvider.IsObjective(obj)
     if not targetId then return false, nil end
 
     local currentStepNum = ZGV.CurrentStepNum or 1
-    local steps = (ZGV.CurrentGuide and ZGV.CurrentGuide.steps) or { ZGV.CurrentStep }
-    local maxLookahead = math.min(currentStepNum + 4, #steps)
+    local steps = ZGV.CurrentGuide and ZGV.CurrentGuide.steps
+    local maxLookahead = currentStepNum
+    
+    if steps then
+        maxLookahead = math.min(currentStepNum + 4, #steps)
+    else
+        steps = { [currentStepNum] = ZGV.CurrentStep }
+    end
 
     for stepIdx = currentStepNum, maxLookahead do
         local step = steps[stepIdx]
