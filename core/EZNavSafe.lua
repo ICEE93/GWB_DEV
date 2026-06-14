@@ -648,13 +648,15 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
     local co = coroutine.create(function()
         searchStartTime = getHighPrecTime()
         
-        -- Pre-load tiles in the bounding box between start and end (no buffer needed)
-        local minTx = math.min(tx1, tx2)
-        local maxTx = math.max(tx1, tx2)
-        local minTy = math.min(ty1, ty2)
-        local maxTy = math.max(ty1, ty2)
+        -- Pre-load tiles in the bounding box between start and end with a 1-tile buffer
+        -- A 1-tile buffer ensures that winding paths curving slightly outside the box don't fail.
+        local minTx = math.min(tx1, tx2) - 1
+        local maxTx = math.max(tx1, tx2) + 1
+        local minTy = math.min(ty1, ty2) - 1
+        local maxTy = math.max(ty1, ty2) + 1
         
-        if (maxTx - minTx) <= 12 and (maxTy - minTy) <= 12 then
+        -- Relaxed bounding box limit to 14 (12 original + 2 buffer)
+        if (maxTx - minTx) <= 14 and (maxTy - minTy) <= 14 then
             for tx = minTx, maxTx do
                 for ty = minTy, maxTy do
                     Nav.LoadTile(mapId, tx, ty)
