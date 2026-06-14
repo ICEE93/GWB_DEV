@@ -23,7 +23,11 @@ function ZygorProvider.GetNextWaypoint()
     end
 
     local wp = ZGV.Pointer.DestinationWaypoint
+    local debugZ = GWB.Settings and GWB.Settings.DebugZygor
+
     if wp and wp.x and wp.y and wp.m then
+        if debugZ then GWB:Print("[Zygor Debug] Waypoint coords:", wp.m, wp.x, wp.y) end
+        
         -- Zygor uses normalized coordinates (e.g., 0.45)
         local wx, wy, wz = MapPosToWorldPos(wp.m, wp.x, wp.y)
         if wx and wy then
@@ -31,8 +35,10 @@ function ZygorProvider.GetNextWaypoint()
             
             -- If this step requires NPC interaction, map it to the engine's 'available' or 'complete' type
             if ZGV.CurrentStep and ZGV.CurrentStep.goals then
-                for _, goal in ipairs(ZGV.CurrentStep.goals) do
+                for i, goal in ipairs(ZGV.CurrentStep.goals) do
                     local action = goal.action
+                    if debugZ then GWB:Print("[Zygor Debug] Goal", i, "Action:", tostring(action), "NPCID:", tostring(goal.npcid), "TargetID:", tostring(goal.targetid)) end
+                    
                     if action == "talk" or action == "accept" or action == "turnin" or 
                        action == "buy" or action == "sell" or action == "interact" then
                         
@@ -50,11 +56,15 @@ function ZygorProvider.GetNextWaypoint()
                             p.id = tonumber(goal.mobs[1].id)
                         end
                         
-                        if p.id then break end
+                        if p.id then
+                            if debugZ then GWB:Print("[Zygor Debug] Matched interaction! Returning pin with ID:", p.id) end
+                            break 
+                        end
                     end
                 end
             end
             
+            if debugZ and not p.id then GWB:Print("[Zygor Debug] Returning pure coordinates. No NPC ID found.") end
             return p
         end
     end

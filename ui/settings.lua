@@ -14,6 +14,9 @@ end
 if GWB.Settings.DebugWhiskers == nil then
     GWB.Settings.DebugWhiskers = false
 end
+if GWB.Settings.DebugZygor == nil then
+    GWB.Settings.DebugZygor = false
+end
 
 local configFrame = CreateFrame("Frame", "GWBConfigFrame", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(480, 500)
@@ -39,6 +42,7 @@ function GWB:SaveSettings()
     GWB.Storage.Settings.Core.QuestieAutopilot = GWB.Settings.QuestieAutopilot
     GWB.Storage.Settings.Core.AutopilotProvider = GWB.Settings.AutopilotProvider
     GWB.Storage.Settings.Core.DebugWhiskers = GWB.Settings.DebugWhiskers
+    GWB.Storage.Settings.Core.DebugZygor = GWB.Settings.DebugZygor
 
     for pluginName, plugin in pairs(GWB.plugins) do
         if plugin.settings then
@@ -72,6 +76,9 @@ function GWB:LoadSettings()
         end
         if GWB.Storage.Settings.Core.DebugWhiskers ~= nil then
             GWB.Settings.DebugWhiskers = GWB.Storage.Settings.Core.DebugWhiskers
+        end
+        if GWB.Storage.Settings.Core.DebugZygor ~= nil then
+            GWB.Settings.DebugZygor = GWB.Storage.Settings.Core.DebugZygor
         end
     end
 
@@ -159,6 +166,19 @@ function GWB:RebuildConfigUI()
     cbWhiskersText:SetText("Show Navigation Rays (Debug)")
     cbWhiskers:SetScript("OnClick", function(self)
         GWB.Settings.DebugWhiskers = self:GetChecked()
+        GWB:SaveSettings()
+    end)
+    yOffset = yOffset - 30
+
+    local cbZygor = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+    cbZygor:SetSize(24, 24)
+    cbZygor:SetPoint("TOPLEFT", 20, yOffset)
+    cbZygor:SetChecked(GWB.Settings.DebugZygor)
+    local cbZygorText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    cbZygorText:SetPoint("LEFT", cbZygor, "RIGHT", 5, 1)
+    cbZygorText:SetText("Debug Zygor Provider")
+    cbZygor:SetScript("OnClick", function(self)
+        GWB.Settings.DebugZygor = self:GetChecked()
         GWB:SaveSettings()
     end)
     yOffset = yOffset - 30
