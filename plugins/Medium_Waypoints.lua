@@ -371,8 +371,8 @@ function _tickTest()
         end
 
         -- If not interacting, move towards the pin coordinate
-        local distToPin = Distance(px, py, pz, pin.wx, pin.wy, pin.wz)
-        if distToPin > 5 then
+        local distToPin2D = Distance(px, py, 0, pin.wx, pin.wy, 0)
+        if distToPin2D > 5 then
             if GWB.Settings.UseEZNavSafe and GWB.EZMover then
                 GWB.EZMover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
             else

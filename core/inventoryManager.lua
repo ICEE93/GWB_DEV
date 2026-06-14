@@ -69,9 +69,20 @@ function GWB.Inv:ScanBagsForBestConsumable(isDrink)
     local playerLevel = UnitLevel("player") or 1
 
     for bag = 0, 4 do
-        local numSlots = C_Container and C_Container.GetContainerNumSlots(bag) or GetContainerNumSlots(bag)
+        local numSlots = 0
+        if C_Container and C_Container.GetContainerNumSlots then
+            numSlots = C_Container.GetContainerNumSlots(bag)
+        elseif GetContainerNumSlots then
+            numSlots = GetContainerNumSlots(bag)
+        end
+        
         for slot = 1, numSlots do
-            local itemId = C_Container and C_Container.GetContainerItemID(bag, slot) or GetContainerItemID(bag, slot)
+            local itemId = nil
+            if C_Container and C_Container.GetContainerItemID then
+                itemId = C_Container.GetContainerItemID(bag, slot)
+            elseif GetContainerItemID then
+                itemId = GetContainerItemID(bag, slot)
+            end
             if itemId then
                 local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice, classID, subclassID = GetItemInfo(itemId)
                 
