@@ -164,6 +164,8 @@ local lastMovementSpeed = 0
 
 local debugRaysFrame = CreateFrame("Frame", "GWB_DebugRays", UIParent)
 debugRaysFrame:SetAllPoints()
+debugRaysFrame:SetFrameStrata("TOOLTIP")
+
 local debugLines = {}
 local function GetDebugLine(index)
     if not debugLines[index] then
@@ -249,6 +251,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
 
         local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
         local lineIndex = 1
+        local uiScale = UIParent:GetEffectiveScale()
 
         -- Check if current path is clear up to the destination (don't check past it!)
         local currentPathClear = true
@@ -266,8 +269,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     if sx1 and sx2 then
                         local l = GetDebugLine(lineIndex)
                         if hit then l:SetColorTexture(1, 0, 0, 0.8) else l:SetColorTexture(0, 1, 0, 0.8) end
-                        l:SetStartPoint("BOTTOMLEFT", sx1, sy1)
-                        l:SetEndPoint("BOTTOMLEFT", sx2, sy2)
+                        l:SetStartPoint("BOTTOMLEFT", debugRaysFrame, sx1 / uiScale, sy1 / uiScale)
+                        l:SetEndPoint("BOTTOMLEFT", debugRaysFrame, sx2 / uiScale, sy2 / uiScale)
                         l:Show()
                         lineIndex = lineIndex + 1
                     end
@@ -318,8 +321,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                         if sx1 and sx2 then
                             local l = GetDebugLine(lineIndex)
                             if hit then l:SetColorTexture(1, 0, 0, 0.5) else l:SetColorTexture(0, 1, 0, 0.5) end
-                            l:SetStartPoint("BOTTOMLEFT", sx1, sy1)
-                            l:SetEndPoint("BOTTOMLEFT", sx2, sy2)
+                            l:SetStartPoint("BOTTOMLEFT", debugRaysFrame, sx1 / uiScale, sy1 / uiScale)
+                            l:SetEndPoint("BOTTOMLEFT", debugRaysFrame, sx2 / uiScale, sy2 / uiScale)
                             l:Show()
                             lineIndex = lineIndex + 1
                         end
