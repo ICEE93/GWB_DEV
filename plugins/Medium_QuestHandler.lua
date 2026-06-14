@@ -82,6 +82,15 @@ GWB.QuestHandler.IsQuestieObjectiveFast = function(obj)
                            (objective.Type == "object" and typeId == 8 and objective.Id == objId) then
                             return true, quest.name or tostring(questId)
                         end
+                        
+                        -- Check IdList for multiple valid IDs (common in multi-mob kill objectives)
+                        if type(objective.IdList) == "table" then
+                            for _, vId in pairs(objective.IdList) do
+                                if vId == objId then
+                                    return true, quest.name or tostring(questId)
+                                end
+                            end
+                        end
 
                         -- item drop check via QuestieDB
                         if objective.Type == "item" and typeId == 5 and QuestieDB then
@@ -104,13 +113,18 @@ GWB.QuestHandler.IsQuestieObjectiveFast = function(obj)
                             if dropMatched then return true, quest.name or tostring(questId) end
                         end
 
-                        -- Fallback string matching for GameObjects (like Milly's Harvest)
-                        if (typeId == 8 or typeId == 3) and quest.name then
+                        -- Fallback string matching for GameObjects and NPCs with missing IDs
+                        if (typeId == 5 or typeId == 8 or typeId == 3) and quest.name then
                             local objName = ObjectName(obj)
                             if objName and string.lower(objName) == string.lower(quest.name) then
                                 return true, quest.name
                             end
                             if objective.Description and objName and string.find(string.lower(objective.Description), string.lower(objName), 1, true) then
+                                return true, quest.name
+                            end
+                            
+                            -- Reverse string find: sometimes the mob name contains the description (e.g. "Diseased Boar" contains "Boar")
+                            if objective.Description and objName and string.find(string.lower(objName), string.lower(objective.Description), 1, true) then
                                 return true, quest.name
                             end
                         end
