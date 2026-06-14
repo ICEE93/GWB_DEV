@@ -348,18 +348,24 @@ function _tickTest()
                 local cx, cy, cz = ObjectPosition(foundTarget)
                 local dist = Distance(px, py, pz, cx, cy, cz)
                 if dist < 4.5 then
-                    -- Stop moving
-                    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                        GWB.EZMover:Stop()
-                    end
-                    ClickToMove(px, py, pz)
-                    
-                    -- Debounce interaction
+                    -- Debounce interaction so we don't spam stop/interact every tick
                     local now = GetTime()
                     if now - (GWB.lastQuestieInteractTime or 0) > 2.0 then
+                        -- Stop moving
+                        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                            if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+                        end
+                        ClickToMove(px, py, pz)
+                        
                         GWB.lastQuestieInteractTime = now
-                        ObjectInteract(foundTarget)
-                        GWB:Print("Interacting with quest NPC/Object:", ObjectName(foundTarget))
+                        
+                        -- Wait for server to process stop movement before interacting
+                        C_Timer.After(0.3, function()
+                            if ObjectExists(foundTarget) then
+                                ObjectInteract(foundTarget)
+                                GWB:Print("Interacting with quest NPC/Object:", ObjectName(foundTarget))
+                            end
+                        end)
                     end
                 else
                     -- Move directly to the NPC/Object
