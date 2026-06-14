@@ -343,11 +343,26 @@ function _tickTest()
                     end
                 end
             end
+            
+            if GWB.Settings.DebugZygor then
+                if foundTarget then
+                    GWB:Print("[Zygor Debug] Waypoint Engine found target ID", pin.id, "in Object Manager.")
+                else
+                    GWB:Print("[Zygor Debug] Waypoint Engine could NOT find target ID", pin.id, "nearby!")
+                end
+            end
 
             if foundTarget then
                 local cx, cy, cz = ObjectPosition(foundTarget)
-                local dist = Distance(px, py, pz, cx, cy, cz)
-                if dist < 4.5 then
+                
+                -- Use 2D distance for interactions to avoid Z-axis height issues (e.g. tall NPCs or slightly floating objectives)
+                local dist2D = 999
+                if px and cx then
+                    dist2D = math.sqrt((px - cx)^2 + (py - cy)^2)
+                end
+                
+                -- Interaction range is usually 5 yards. Using 5.0 to be safe.
+                if dist2D < 5.0 then
                     -- Debounce interaction so we don't spam stop/interact every tick
                     local now = GetTime()
                     if now - (GWB.lastQuestieInteractTime or 0) > 2.0 then
@@ -362,6 +377,13 @@ function _tickTest()
                         -- Wait for server to process stop movement before interacting
                         C_Timer.After(0.3, function()
                             if ObjectExists(foundTarget) then
+                                local setMo = SetMouseover or (Nn and Nn.SetMouseover)
+                                local unlock = Unlock or (Nn and Nn.Unlock)
+                                if setMo and unlock then
+                                    setMo(foundTarget)
+                                    unlock(TargetUnit, "mouseover")
+                                end
+                                
                                 ObjectInteract(foundTarget)
                                 GWB:Print("Interacting with quest NPC/Object:", ObjectName(foundTarget))
                             end
