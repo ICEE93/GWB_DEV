@@ -37,10 +37,17 @@ function ZygorProvider.GetNextWaypoint()
                        action == "buy" or action == "sell" or action == "interact" then
                         
                         p.type = "available"
-                        p.id = goal.npcid or goal.targetid
+                        local rawId = goal.npcid or goal.targetid
+                        if rawId then
+                            if type(rawId) == "string" and rawId:find(",") then
+                                p.id = tonumber((strsplit(",", rawId)))
+                            else
+                                p.id = tonumber(rawId)
+                            end
+                        end
                         
                         if not p.id and goal.mobs and goal.mobs[1] then
-                            p.id = goal.mobs[1].id
+                            p.id = tonumber(goal.mobs[1].id)
                         end
                         
                         if p.id then break end
@@ -80,11 +87,26 @@ function ZygorProvider.IsObjective(obj)
     for _, goal in ipairs(ZGV.CurrentStep.goals) do
         -- Action types in Zygor like 'kill', 'collect', 'talk', 'accept', 'turnin', 'interact'
         local match = false
-        if goal.targetid == targetId then match = true end
-        if goal.npcid == targetId then match = true end
+        
+        -- Zygor IDs are often strings, must cast to number for comparison
+        local function checkIdMatch(rawId)
+            if not rawId then return false end
+            if type(rawId) == "string" and rawId:find(",") then
+                for idStr in rawId:gmatch("%d+") do
+                    if tonumber(idStr) == targetId then return true end
+                end
+                return false
+            else
+                return tonumber(rawId) == targetId
+            end
+        end
+
+        if checkIdMatch(goal.targetid) then match = true end
+        if checkIdMatch(goal.npcid) then match = true end
+        
         if goal.mobs then
             for _, mob in ipairs(goal.mobs) do
-                if mob.id == targetId then match = true break end
+                if checkIdMatch(mob.id) then match = true; break end
             end
         end
 
