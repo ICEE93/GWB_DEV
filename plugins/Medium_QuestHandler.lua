@@ -209,8 +209,7 @@ local function ScanNearbyObjectives()
                                 local fontString = _G["GameTooltipTextLeft" .. lineNum]
                                 if fontString and fontString.GetText then
                                     local text = fontString:GetText()
-                                    if text then
-                                        -- See if this tooltip line matches any active objective
+                                    if text and string.len(text) > 3 then
                                         if activeObjectives[text] then
                                             matchFound = true
                                             break

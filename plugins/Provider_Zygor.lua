@@ -168,7 +168,7 @@ function ZygorProvider.IsObjective(obj)
     local maxLookahead = currentStepNum
     
     if steps then
-        maxLookahead = math.min(currentStepNum + 4, #steps)
+        maxLookahead = math.min(currentStepNum + 20, #steps)
     else
         steps = { [currentStepNum] = ZGV.CurrentStep }
     end
@@ -212,6 +212,11 @@ function ZygorProvider.IsObjective(obj)
                         for _, mob in ipairs(goal.mobs) do
                             if checkIdMatch(mob.id) then match = true; break end
                         end
+                    end
+                    
+                    if not match and goal.target then
+                        local objName = type(ObjectName) == "function" and ObjectName(obj) or (Nn and Nn.ObjectName and Nn.ObjectName(obj))
+                        if objName and objName == goal.target then match = true end
                     end
 
                     if match then
