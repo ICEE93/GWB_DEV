@@ -167,7 +167,7 @@ debugRaysFrame:SetAllPoints()
 local debugLines = {}
 local function GetDebugLine(index)
     if not debugLines[index] then
-        debugLines[index] = debugRaysFrame:CreateLine()
+        debugLines[index] = debugRaysFrame:CreateLine(nil, "OVERLAY")
         debugLines[index]:SetThickness(2)
     end
     return debugLines[index]
@@ -257,11 +257,12 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 local cx = px + math.cos(yaw) * rayLen
                 local cy = py + math.sin(yaw) * rayLen
                 local cz = pz + slopeZ * rayLen
-                local hit = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x100111)
+                -- Raise ray to chest height (+2.0) to avoid clipping steep hills
+                local hit = tLine(px, py, pz + 2.0, cx, cy, cz + 2.0, 0x100111)
 
                 if drawDebug then
-                    local sx1, sy1 = WorldToScreen(px, py, pz + 1.0)
-                    local sx2, sy2 = WorldToScreen(cx, cy, cz + 1.0)
+                    local sx1, sy1 = WorldToScreen(px, py, pz + 2.0)
+                    local sx2, sy2 = WorldToScreen(cx, cy, cz + 2.0)
                     if sx1 and sx2 then
                         local l = GetDebugLine(lineIndex)
                         if hit then l:SetColorTexture(1, 0, 0, 0.8) else l:SetColorTexture(0, 1, 0, 0.8) end
@@ -308,11 +309,12 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     local rx = px + math.cos(angle) * rayLen
                     local ry = py + math.sin(angle) * rayLen
                     local rz = pz + slopeZ * rayLen
-                    local hit = tLine(px, py, pz + 1.0, rx, ry, rz + 1.0, 0x100111)
+                    -- Raise ray to chest height (+2.0) to avoid clipping steep hills
+                    local hit = tLine(px, py, pz + 2.0, rx, ry, rz + 2.0, 0x100111)
 
                     if drawDebug then
-                        local sx1, sy1 = WorldToScreen(px, py, pz + 1.0)
-                        local sx2, sy2 = WorldToScreen(rx, ry, rz + 1.0)
+                        local sx1, sy1 = WorldToScreen(px, py, pz + 2.0)
+                        local sx2, sy2 = WorldToScreen(rx, ry, rz + 2.0)
                         if sx1 and sx2 then
                             local l = GetDebugLine(lineIndex)
                             if hit then l:SetColorTexture(1, 0, 0, 0.5) else l:SetColorTexture(0, 1, 0, 0.5) end
