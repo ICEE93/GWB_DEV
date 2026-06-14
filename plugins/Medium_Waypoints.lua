@@ -288,6 +288,11 @@ function _tickTest()
         -- Run Autopilot navigation
         local pin = GWB.QuestHandler and GWB.QuestHandler.GetNextQuestieWaypoint and GWB.QuestHandler.GetNextQuestieWaypoint()
         if not pin then
+            GWB.autopilotEmptyTicks = (GWB.autopilotEmptyTicks or 0) + 1
+            if GWB.autopilotEmptyTicks < 15 then
+                return -- Buffer for ~3 seconds to ignore split-second Questie redraws
+            end
+
             -- No quests, stop moving
             local now = GetTime()
             if now - (GWB.lastAutopilotHaltLog or 0) > 5.0 then
@@ -305,6 +310,9 @@ function _tickTest()
             DoActiveEngage()
             return
         end
+        
+        -- Pin found, reset buffer
+        GWB.autopilotEmptyTicks = 0
 
         local px, py, pz = ObjectPosition("player")
         if not px then return end

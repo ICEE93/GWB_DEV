@@ -158,21 +158,25 @@ local function GetWorldCoordsFromMap(mapID, mapX, mapY)
     return nil, nil, nil
 end
 
-local function GetQuestiePins()
-    if not QuestieLoader then return {} end
-    local ok, QuestieMap = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieMap")
-    if not ok or not QuestieMap or not QuestieMap.questIdFrames then return {} end
+local cachedPins = {}
+local lastCacheTime = 0
 
-    -- Force Questie to refresh its data by calling its update function if available
-    if Questie and Questie.Update then
-        pcall(Questie.Update)
+local function GetQuestiePins()
+    local now = GetTime()
+    if now - lastCacheTime < 2.0 then
+        return cachedPins
     end
+    lastCacheTime = now
+
+    if not QuestieLoader then return cachedPins end
+    local ok, QuestieMap = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieMap")
+    if not ok or not QuestieMap or not QuestieMap.questIdFrames then return cachedPins end
     
     local okZ, ZoneDB = pcall(QuestieLoader.ImportModule, QuestieLoader, "ZoneDB")
     
     local pins = {}
     local currentMapID = C_Map.GetBestMapForUnit("player")
-    if not currentMapID then return {} end
+    if not currentMapID then return cachedPins end -- Retain cache during map transitions
     
     local scanCount = 0
     local matchCount = 0
@@ -269,14 +273,16 @@ local function GetQuestiePins()
         end
     end
     
+    cachedPins = pins
+    
     -- Throttle prints so we don't spam chat
-    local now = GetTime()
-    if now - (GWB.lastQuestieLogTime or 0) > 3.0 then
-        GWB.lastQuestieLogTime = now
+    local nowTime = GetTime()
+    if nowTime - (GWB.lastQuestieLogTime or 0) > 3.0 then
+        GWB.lastQuestieLogTime = nowTime
         GWB:Print("[Autopilot] Scanned " .. scanCount .. " Questie frames, matched map " .. tostring(currentMapID) .. ": " .. matchCount .. " pins")
     end
     
-    return pins
+    return cachedPins
 end
 
 local function IsQuestLogFull()
