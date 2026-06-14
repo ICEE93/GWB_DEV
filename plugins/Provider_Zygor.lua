@@ -58,7 +58,16 @@ function ZygorProvider.IsObjective(obj)
 
     for _, goal in ipairs(ZGV.CurrentStep.goals) do
         -- Action types in Zygor like 'kill', 'collect', 'talk', 'accept', 'turnin', 'interact'
-        if goal.targetid == targetId then
+        local match = false
+        if goal.targetid == targetId then match = true end
+        if goal.npcid == targetId then match = true end
+        if goal.mobs then
+            for _, mob in ipairs(goal.mobs) do
+                if mob.id == targetId then match = true break end
+            end
+        end
+
+        if match then
             local action = goal.action
             if action == "kill" or action == "collect" or action == "interact" or 
                action == "talk" or action == "accept" or action == "turnin" or 
