@@ -211,8 +211,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
             local ox, oy, oz = ObjectPosition(o)
             if ox then
                 local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
-                -- Check if mob is within 15 yards and in front of us
-                if odist < 15.0 and odist > 0.1 then
+                -- Check if mob is within 25 yards (aggro range is 20) and in front of us
+                if odist < 25.0 and odist > 0.1 then
                     local toMobX, toMobY = ox - px, oy - py
                     local toMobDist = math.sqrt(toMobX^2 + toMobY^2)
                     local toMobNormX, toMobNormY = toMobX / toMobDist, toMobY / toMobDist
@@ -221,7 +221,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     local moveNormX, moveNormY = dx / dist2D, dy / dist2D
                     local dotProduct = toMobNormX * moveNormX + toMobNormY * moveNormY
 
-                    if dotProduct > 0.3 then  -- Mob is in front
+                    if dotProduct > 0.1 then  -- Mob is generally in front
                         -- Check if mob is aggressive and not a quest objective
                         local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
                         local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast and GWB.QuestHandler.IsQuestieObjectiveFast(o)
@@ -230,7 +230,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                             -- Calculate avoidance vector (perpendicular to direction to mob)
                             local avoidX, avoidY = -toMobNormY, toMobNormX
                             -- Weight by distance (closer = stronger avoidance)
-                            local weight = (15.0 - odist) / 15.0
+                            local weight = (25.0 - odist) / 25.0
                             avoidanceVectorX = avoidanceVectorX + avoidX * weight
                             avoidanceVectorY = avoidanceVectorY + avoidY * weight
                             avoidanceWeight = avoidanceWeight + weight
@@ -244,9 +244,9 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         if avoidanceWeight > 0.1 then
             local avoidNormX = avoidanceVectorX / avoidanceWeight
             local avoidNormY = avoidanceVectorY / avoidanceWeight
-            -- Blend avoidance with goal direction (70% goal, 30% avoidance)
-            finalX = px + (dx * 0.7 + avoidNormX * dist2D * 0.3)
-            finalY = py + (dy * 0.7 + avoidNormY * dist2D * 0.3)
+            -- Blend avoidance with goal direction (30% goal, 70% avoidance for strong steering)
+            finalX = px + (dx * 0.3 + avoidNormX * dist2D * 0.7)
+            finalY = py + (dy * 0.3 + avoidNormY * dist2D * 0.7)
             finalZ = pz + slopeZ * dist2D
             GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
             return

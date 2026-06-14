@@ -77,18 +77,9 @@ GWB.QuestHandler.IsQuestieObjectiveFast = function(obj)
             if type(quest.Objectives) == "table" then
                 for _, objective in pairs(quest.Objectives) do
                     if type(objective) == "table" and not objective.Completed then
-                        -- direct monster/object match with additional validation
+                        -- direct monster/object match
                         if (objective.Type == "monster" and typeId == 5 and objective.Id == objId) or
                            (objective.Type == "object" and typeId == 8 and objective.Id == objId) then
-                            -- Additional validation: check if mob name matches objective description
-                            if typeId == 5 and objective.Description then
-                                local mobName = ObjectName(obj)
-                                if mobName and string.find(mobName, objective.Description, 1, true) then
-                                    return true, quest.name or tostring(questId)
-                                end
-                                -- If name doesn't match, don't count as valid quest mob
-                                return false
-                            end
                             return true, quest.name or tostring(questId)
                         end
 

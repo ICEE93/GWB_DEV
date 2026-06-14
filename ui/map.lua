@@ -255,70 +255,86 @@ function GWB:OnBotScanTick(losCheck)
     local old = GetMouseover()
     
     local objects = Objects()
+    
+    -- Pass 1: Identify all live hostile mobs
+    local hostileMobs = {}
     for i=1, #objects do
         local o = objects[i]
-        SetMouseover(o)
         local t = ObjectType(o)
         if t == 5 then -- NPCs
-            local ptr = ObjectPointer(o)
-            if not GWB.BlacklistedTargets or not GWB.BlacklistedTargets[ptr] or GWB.BlacklistedTargets[ptr] < GetTime() then
-                --print("found NPC", ObjectName(o), "==", UnitCanAttack("player", "mouseover"))
-                local _, ctype = UnitCreatureType("mouseover")
-            if 
-              not UnitIsDeadOrGhost("mouseover") and 
-              UnitCanAttack("player", "mouseover") and
-              ctype ~= 8 -- Critter type
-            then
+            SetMouseover(o)
+            local _, ctype = UnitCreatureType("mouseover")
+            if not UnitIsDeadOrGhost("mouseover") and UnitCanAttack("player", "mouseover") and ctype ~= 8 then
                 local x, y, z = ObjectPosition(o)
-                local d = Distance(px, py, 0, x, y, 0)
-                if d < dist then
-                    -- Check if mob is in aggro range and not a quest objective
-                    local isQuestieMob = true
-                    local inAggroRange = d < 20.0  -- Typical aggro range
+                if x then
+                    table.insert(hostileMobs, {obj = o, x = x, y = y, z = z})
+                end
+            end
+        end
+    end
 
-                    if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast) then
-                        if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
-                            isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
-                            -- If not a quest mob and in aggro range, skip it to avoid pulling
-                            if not isQuestieMob then
-                                -- Throttle debug logging to prevent spam
-                                if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
-                                    GWB:Debug("[QuestFilter] Skipping non-quest mob in aggro range:", ObjectName(o))
-                                    GWB.lastQuestFilterLog = GetTime()
-                                end
-                            end
-                        else
-                            -- If autopilot is enabled but QuestieHandler is not available, do not pull random mobs!
-                            if GWB.Settings.QuestieAutopilot then
-                                isQuestieMob = false
-                                if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
-                                    GWB:Debug("[QuestFilter] QuestieHandler not available, skipping", ObjectName(o))
-                                    GWB.lastQuestFilterLog = GetTime()
-                                end
+    -- Pass 2: Evaluate targets
+    local bestScore = 99999
+    for i=1, #hostileMobs do
+        local mobInfo = hostileMobs[i]
+        local o = mobInfo.obj
+        local x, y, z = mobInfo.x, mobInfo.y, mobInfo.z
+        local ptr = ObjectPointer(o)
+        
+        if not GWB.BlacklistedTargets or not GWB.BlacklistedTargets[ptr] or GWB.BlacklistedTargets[ptr] < GetTime() then
+            local rawDist = Distance(px, py, 0, x, y, 0)
+            
+            if rawDist < 35.0 then -- Max search radius
+                local isQuestieMob = true
+                local inAggroRange = rawDist < 20.0
+
+                if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast) then
+                    if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
+                        isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                        if not isQuestieMob then
+                            if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
+                                GWB:Debug("[QuestFilter] Skipping non-quest mob in aggro range:", ObjectName(o))
+                                GWB.lastQuestFilterLog = GetTime()
                             end
                         end
+                    else
+                        if GWB.Settings.QuestieAutopilot then
+                            isQuestieMob = false
+                        end
                     end
+                end
 
-                    if isQuestieMob then
-                        -- LoS, and Z diff?
-                    local diffZ = pz - z;
-
-                    local badHeight = diffZ > 30 or diffZ < -30;
+                if isQuestieMob then
+                    local diffZ = pz - z
+                    local badHeight = diffZ > 30 or diffZ < -30
                     if not badHeight then
                         local hitX = false
                         if checkLoS then
                             hitX = TraceLine(px, py, pz+1.5, x, y, z+1.5, 0x111)
-                            --print("hit?", hitX)
                         end
 
                         if hitX == false then
-                            target = o
-                            dist = d
+                            -- Cluster Penalty Math
+                            local clusterCount = 0
+                            for j = 1, #hostileMobs do
+                                if i ~= j then
+                                    local other = hostileMobs[j]
+                                    local distToOther = Distance(x, y, 0, other.x, other.y, 0)
+                                    if distToOther < 15.0 then
+                                        clusterCount = clusterCount + 1
+                                    end
+                                end
+                            end
+                            
+                            local score = rawDist + (clusterCount * 100) -- Massive penalty for clusters
+                            if score < bestScore then
+                                target = o
+                                bestScore = score
+                                dist = rawDist -- Update purely for debugging output
+                            end
                         end
                     end
-                    end
                 end
-            end
             end
         end
     end
