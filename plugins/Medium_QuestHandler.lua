@@ -135,14 +135,25 @@ local IsQuestieObjectiveFast = GWB.QuestHandler.IsQuestieObjectiveFast
 
 local function GetWorldCoordsFromMap(mapID, mapX, mapY)
     if not mapID or not mapX or not mapY then return nil, nil, nil end
-    local mapId, worldPos = C_Map.GetWorldPosFromMapPos(mapID, {x = mapX, y = mapY})
+    local mapPos = CreateVector2D and CreateVector2D(mapX, mapY) or {x = mapX, y = mapY}
+    local ret1, ret2 = C_Map.GetWorldPosFromMapPos(mapID, mapPos)
+    local worldPos = (type(ret2) == "table" and ret2) or (type(ret1) == "table" and ret1)
+    
     if worldPos then
+        local wx, wy
+        if type(worldPos.GetXY) == "function" then
+            wx, wy = worldPos:GetXY()
+        else
+            wx, wy = worldPos.x, worldPos.y
+        end
+        if not wx or not wy then return nil, nil, nil end
+        
         local wz = 0
-        local cx, cy, cz = TraceLine(worldPos.x, worldPos.y, 5000, worldPos.x, worldPos.y, -5000, 0x110)
+        local cx, cy, cz = TraceLine(wx, wy, 5000, wx, wy, -5000, 0x110)
         if cx ~= false then
             wz = cz
         end
-        return worldPos.x, worldPos.y, wz
+        return wx, wy, wz
     end
     return nil, nil, nil
 end
