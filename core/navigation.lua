@@ -162,24 +162,40 @@ local lastWhiskerAngle = nil
 local lastWhiskerTime = 0
 local lastMovementSpeed = 0
 
-local debugRaysFrame = CreateFrame("Frame", "GWB_DebugRays", UIParent)
-debugRaysFrame:SetAllPoints()
-debugRaysFrame:SetFrameStrata("TOOLTIP")
+-- LibDraw rendering for whiskers
+local libDrawRays = {}
+local libDrawInstance = nil
 
-local debugLines = {}
-local function GetDebugLine(index)
-    if not debugLines[index] then
-        debugLines[index] = debugRaysFrame:CreateTexture(nil, "OVERLAY")
-        debugLines[index]:SetTexture("Interface\\Buttons\\WHITE8x8")
-        debugLines[index]:SetBlendMode("BLEND")
-        debugLines[index]:SetSize(8, 8)
+local function InitLibDraw()
+    if libDrawInstance then return true end
+    if Nn and Nn.Utils and Nn.Utils.Draw then
+        local ok, draw = pcall(function() return Nn.Utils.Draw:New() end)
+        if ok and draw then
+            libDrawInstance = draw
+            if libDrawInstance.Enable then pcall(function() libDrawInstance:Enable() end) end
+            libDrawInstance:Sync(function(d)
+                local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
+                if not drawDebug or #libDrawRays == 0 then
+                    d:ClearCanvas()
+                    return
+                end
+                
+                d:ClearCanvas()
+                d:SetWidth(2)
+                for i = 1, #libDrawRays do
+                    local ray = libDrawRays[i]
+                    if ray.hit then
+                        d:SetColorRaw(255, 0, 0, 200)
+                    else
+                        d:SetColorRaw(0, 255, 0, 200)
+                    end
+                    d:Line(ray.px, ray.py, ray.pz, ray.rx, ray.ry, ray.rz)
+                end
+            end)
+            return true
+        end
     end
-    return debugLines[index]
-end
-local function HideDebugLines(fromIndex)
-    for i = fromIndex, #debugLines do
-        debugLines[i]:Hide()
-    end
+    return false
 end
 
 local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
@@ -252,43 +268,9 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         local step = (math.pi * 2) / numRays
 
         local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
-        local lineIndex = 1
-        local w2s = WorldToScreen or (Nn and Nn.WorldToScreen)
-        local screenW = UIParent:GetWidth()
-        local screenH = UIParent:GetHeight()
-
-        -- Helper to draw a dotted line using the texture pool
-        local function DrawDottedLine(startZ, endZ, hit, rayX, rayY, rayZ)
-            if not drawDebug or not w2s then return end
-            
-            local sx1, sy1 = w2s(px, py, startZ)
-            local sx2, sy2 = w2s(rayX, rayY, endZ)
-            
-            if sx1 and sx2 then
-                -- Normalize coordinates if they are 0-1
-                if sx1 <= 1.0 and sy1 <= 1.0 then
-                    sx1, sy1 = sx1 * screenW, sy1 * screenH
-                    sx2, sy2 = sx2 * screenW, sy2 * screenH
-                end
-                
-                -- Draw 3 dots along the ray
-                for dot = 1, 3 do
-                    local t = dot / 3
-                    local dx = sx1 + (sx2 - sx1) * t
-                    local dy = sy1 + (sy2 - sy1) * t
-                    
-                    local tex = GetDebugLine(lineIndex)
-                    if hit then 
-                        tex:SetColorTexture(1, 0, 0, 0.8) 
-                    else 
-                        tex:SetColorTexture(0, 1, 0, 0.8) 
-                    end
-                    tex:ClearAllPoints()
-                    tex:SetPoint("CENTER", UIParent, "BOTTOMLEFT", dx, dy)
-                    tex:Show()
-                    lineIndex = lineIndex + 1
-                end
-            end
+        if drawDebug then
+            InitLibDraw()
+            wipe(libDrawRays)
         end
 
         -- Waist level raycasts (+1.0) instead of chest/head level (+2.0)
@@ -304,7 +286,9 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 
                 local hit = tLine(px, py, pz + Z_OFFSET, cx, cy, cz + Z_OFFSET, 0x100111)
 
-                DrawDottedLine(pz + Z_OFFSET, cz + Z_OFFSET, hit, cx, cy, cz)
+                if drawDebug then
+                    libDrawRays[#libDrawRays + 1] = {px = px, py = py, pz = pz + Z_OFFSET, rx = cx, ry = cy, rz = cz + Z_OFFSET, hit = hit}
+                end
 
                 if hit then
                     currentPathClear = false
@@ -320,7 +304,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 -- Keep current direction, no change needed
                 lastWhiskerAngle = yaw
                 lastWhiskerTime = now
-                HideDebugLines(lineIndex)
+                -- No need to hide lines manually, LibDraw Sync handles clearing
                 GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
                 return
             end
@@ -347,7 +331,9 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     
                     local hit = tLine(px, py, pz + Z_OFFSET, rx, ry, rz + Z_OFFSET, 0x100111)
 
-                    DrawDottedLine(pz + Z_OFFSET, rz + Z_OFFSET, hit, rx, ry, rz)
+                    if drawDebug then
+                        libDrawRays[#libDrawRays + 1] = {px = px, py = py, pz = pz + Z_OFFSET, rx = rx, ry = ry, rz = rz + Z_OFFSET, hit = hit}
+                    end
 
                     if not hit then
                         angleClearances[i] = angleClearances[i] + rayLen
@@ -364,7 +350,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
             angleScores[i] = angleScores[i] - angleClearances[i]
         end
         
-        HideDebugLines(lineIndex)
+        -- No need to hide lines manually, LibDraw Sync handles clearing
 
         -- Find best angle considering goal direction and clearance
         local bestAngle = nil
