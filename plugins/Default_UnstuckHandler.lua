@@ -207,16 +207,24 @@ local function tickStuckDetection()
     -- we didn't progress enough?
     if stuckCounter == MAX_STUCK_COUNT-5 then
         -- try jumping?
-        Unlock(JumpOrAscendStart)
+        if Unlock and JumpOrAscendStart then
+            Unlock(JumpOrAscendStart)
+            C_Timer.After(0.5, function() if AscendStop then Unlock(AscendStop) end end)
+        end
     end
     if stuckCounter == MAX_STUCK_COUNT-3 then
         -- Try jumping while moving forward for low obstacles
-        Unlock(JumpOrAscendStart)
+        if Unlock and JumpOrAscendStart then
+            Unlock(JumpOrAscendStart)
+            C_Timer.After(0.5, function() if AscendStop then Unlock(AscendStop) end end)
+        end
         -- Also try moving slightly forward while jumping
         local px, py, pz = GWB.Mover:GetPlayerPosition()
         if px then
-            local forwardX, forwardY = px + 2.0, py + 2.0
-            ClickToMove(forwardX, forwardY, pz)
+            local facing = UnitFacing("player") or 0
+            local forwardX = px + math.cos(facing) * 3.0
+            local forwardY = py + math.sin(facing) * 3.0
+            GWB.Mover:MoveToXYZ(forwardX, forwardY, pz)
         end
     end
     if stuckCounter > MAX_STUCK_COUNT then
