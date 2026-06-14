@@ -319,11 +319,14 @@ function _tickTest()
 
         -- If it's a questgiver/finisher (complete or available), let's look for them nearby
         if pin.type == "complete" or pin.type == "available" then
+            local getUnitId = ObjectUnitId or (Nn and Nn.ObjectUnitId)
+            local getObjId = ObjectId or (Nn and Nn.ObjectId)
+            
             local objects = ObjectManager(5) or {}
             local foundTarget = nil
             for i = 1, #objects do
                 local obj = objects[i]
-                if ObjectExists(obj) and ObjectUnitId(obj) == pin.id then
+                if ObjectExists(obj) and getUnitId and getUnitId(obj) == pin.id then
                     foundTarget = obj
                     break
                 end
@@ -334,7 +337,7 @@ function _tickTest()
                 local gameObjs = ObjectManager(8) or {}
                 for i = 1, #gameObjs do
                     local obj = gameObjs[i]
-                    if ObjectExists(obj) and ObjectId(obj) == pin.id then
+                    if ObjectExists(obj) and getObjId and getObjId(obj) == pin.id then
                         foundTarget = obj
                         break
                     end
