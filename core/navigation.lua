@@ -81,14 +81,29 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     local targetX, targetY, targetZ = jx, jy, z
 
     if playerDist > maxSegmentDist then
-        -- Calculate intermediate waypoint towards destination
+        -- Calculate intermediate waypoint towards destination in 2D space
         local dx = targetX - px
         local dy = targetY - py
-        local dz = targetZ - pz
-        local ratio = maxSegmentDist / playerDist
-        targetX = px + dx * ratio
-        targetY = py + dy * ratio
-        targetZ = pz + dz * ratio
+        local dist2D = math.sqrt(dx*dx + dy*dy)
+        
+        if dist2D > 0 then
+            local ratio = maxSegmentDist / dist2D
+            if ratio < 1.0 then
+                targetX = px + dx * ratio
+                targetY = py + dy * ratio
+            end
+        end
+
+        -- Trace the ground Z coordinate at the intermediate target location
+        -- 0x110 is Terrain + WMOCollision
+        local hitX, hitY, hitZ = TraceLine(targetX, targetY, pz + 1000, targetX, targetY, pz - 1000, 0x110)
+        if hitX then
+            targetZ = hitZ
+        else
+            -- If TraceLine fails, just use player Z as a fallback heuristic
+            targetZ = pz
+        end
+
         -- Store final destination for later segments
         GWB.EZMover.finalDest = {x = jx, y = jy, z = z}
     else
