@@ -370,8 +370,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         local bestAngle = nil
         local minScore = 99999
 
-        for i = 0, numRays - 1 do
-            local angle = i * step
+        for i = 1, numRays do
+            local angle = yaw - math.pi + (i - 1) * step
             local diffToGoal = math.abs((angle - yaw + math.pi) % (math.pi * 2) - math.pi)
 
             -- HEAVILY penalize turning away from the goal (e.g. running backwards down a hallway)
