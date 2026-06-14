@@ -8,6 +8,9 @@ end
 if GWB.Settings.ActiveProfile == nil then
     GWB.Settings.ActiveProfile = ""
 end
+if GWB.Settings.QuestieAutopilot == nil then
+    GWB.Settings.QuestieAutopilot = false
+end
 
 local configFrame = CreateFrame("Frame", "GWBConfigFrame", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(480, 500)
@@ -30,6 +33,7 @@ function GWB:SaveSettings()
     GWB.Storage.Settings.Core = GWB.Storage.Settings.Core or {}
     GWB.Storage.Settings.Core.UseEZNavSafe = GWB.Settings.UseEZNavSafe
     GWB.Storage.Settings.Core.ActiveProfile = GWB.Settings.ActiveProfile
+    GWB.Storage.Settings.Core.QuestieAutopilot = GWB.Settings.QuestieAutopilot
 
     for pluginName, plugin in pairs(GWB.plugins) do
         if plugin.settings then
@@ -54,6 +58,9 @@ function GWB:LoadSettings()
         end
         if GWB.Storage.Settings.Core.ActiveProfile ~= nil then
             GWB.Settings.ActiveProfile = GWB.Storage.Settings.Core.ActiveProfile
+        end
+        if GWB.Storage.Settings.Core.QuestieAutopilot ~= nil then
+            GWB.Settings.QuestieAutopilot = GWB.Storage.Settings.Core.QuestieAutopilot
         end
     end
 
@@ -88,8 +95,8 @@ function GWB:RebuildConfigUI()
     local regions = {scrollChild:GetRegions()}
     for _, region in ipairs(regions) do
         if region:GetObjectType() == "FontString" then
+            region:SetText("")
             region:Hide()
-            region:SetParent(nil)
         end
     end
 
@@ -112,6 +119,24 @@ function GWB:RebuildConfigUI()
         GWB.Settings.UseEZNavSafe = self:GetChecked()
         GWB:SaveSettings()
         print("GWB: Set UseEZNavSafe to " .. tostring(GWB.Settings.UseEZNavSafe) .. ". Please /reload.")
+    end)
+    yOffset = yOffset - 25
+
+    local cbAutopilot = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+    cbAutopilot:SetSize(24, 24)
+    cbAutopilot:SetPoint("TOPLEFT", 20, yOffset)
+    cbAutopilot:SetChecked(GWB.Settings.QuestieAutopilot)
+    local cbAutopilotText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    cbAutopilotText:SetPoint("LEFT", cbAutopilot, "RIGHT", 5, 1)
+    cbAutopilotText:SetText("Questie Autopilot (No Waypoints)")
+    cbAutopilot:SetScript("OnClick", function(self)
+        GWB.Settings.QuestieAutopilot = self:GetChecked()
+        -- Clear cached autopilot pin when toggling to force re-evaluation
+        if GWB.QuestHandler then
+            GWB.QuestHandler.CurrentAutopilotPin = nil
+        end
+        GWB:SaveSettings()
+        print("GWB: Set Questie Autopilot to " .. tostring(GWB.Settings.QuestieAutopilot))
     end)
     yOffset = yOffset - 30
     

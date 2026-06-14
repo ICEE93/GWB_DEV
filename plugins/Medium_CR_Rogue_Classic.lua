@@ -90,6 +90,28 @@ local function tickRested()
         return -- skip
     end
 
+    local dist = Distance("player", "target")
+    if dist and dist > 8 and dist <= 30 then
+        local rangedItemId = GetInventoryItemID("player", 18)
+        if rangedItemId then
+            if IsSpellKnown(Throw) or IsUsableSpell("Throw") then
+                if not ShouldCast() then return end
+                -- Stop movement and pause it for 1.2 seconds to allow the cast
+                GWB.pauseMovementUntil = GetTime() + 1.2
+                if GWB.EZMover and GWB.EZMover.Stop then
+                    GWB.EZMover:Stop()
+                elseif GWB.Mover and GWB.Mover.Stop then
+                    GWB.Mover:Stop()
+                end
+                local px, py, pz = ObjectPosition("player")
+                if px then ClickToMove(px, py, pz) end
+                Unlock(CastSpellByName, "Throw")
+                RandomizeNextCast()
+                return
+            end
+        end
+    end
+
     -- Only call StartAttack once per target, not every tick
     local targetGUID = UnitGUID("target")
     if targetGUID ~= lastAttackTarget then

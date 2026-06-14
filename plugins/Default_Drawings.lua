@@ -65,6 +65,7 @@ local function DrawTick(draw)
             -- ehh?
             local waypoints = GWB:GetPointsForCurrentMap()
             --draw:Circle()
+            if waypoints and #waypoints > 0 then
             for i=1, #waypoints do
                 local p = waypoints[i]
                 --draw:Line(p.wx, p.wy, p.wz, p.wx, p.wy, p.wz+1.5)
@@ -103,6 +104,7 @@ local function DrawTick(draw)
                 end
 
             end
+            end  -- Close waypoints check
         end
     end
 end

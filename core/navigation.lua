@@ -49,6 +49,9 @@ local lastDestX, lastDestY, lastDestZ = 0, 0, 0
 
 function GWB.EZMover:MoveToXYZ(x, y, z)
     if isGenerating then return end
+    if GWB.pauseMovementUntil and GetTime() < GWB.pauseMovementUntil then
+        return
+    end
     GWB.EZMover.targetObj = nil
     
     local destDist = math.sqrt((x-lastDestX)^2 + (y-lastDestY)^2 + (z-lastDestZ)^2)
@@ -73,8 +76,27 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
         return
     end
 
+    -- Generate paths in shorter increments to reduce failure rate
+    local maxSegmentDist = 100.0  -- Maximum distance for a single path segment
+    local targetX, targetY, targetZ = jx, jy, z
+
+    if playerDist > maxSegmentDist then
+        -- Calculate intermediate waypoint towards destination
+        local dx = targetX - px
+        local dy = targetY - py
+        local dz = targetZ - pz
+        local ratio = maxSegmentDist / playerDist
+        targetX = px + dx * ratio
+        targetY = py + dy * ratio
+        targetZ = pz + dz * ratio
+        -- Store final destination for later segments
+        GWB.EZMover.finalDest = {x = jx, y = jy, z = z}
+    else
+        GWB.EZMover.finalDest = nil
+    end
+
     isGenerating = true
-    Nn.EZ.Nav.GeneratePath(px, py, pz, jx, jy, z, function(path)
+    Nn.EZ.Nav.GeneratePath(px, py, pz, targetX, targetY, targetZ, function(path)
         isGenerating = false
         if path and type(path) == "table" and #path > 1 then
             -- Apply a consistent small offset to the entire path to prevent 
@@ -161,73 +183,178 @@ function GWB.EZMover:ClickToMoveSafeZ(x, y, z)
     ClickToMove(x, y, finalZ)
 end
 
+-- Track last chosen direction for momentum
+local lastWhiskerAngle = nil
+local lastWhiskerTime = 0
+local lastMovementSpeed = 0
+
 local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
     local finalX, finalY, finalZ = wx, wy, wz
     local tLine = TraceLine or (Nn and Nn.TraceLine)
-    
+
     if tLine then
         local dx = wx - px
         local dy = wy - py
         local dist2D = math.sqrt(dx*dx + dy*dy)
         local slopeZ = (wz - pz) / (dist2D > 0.1 and dist2D or 1)
-        
+
         local yaw = math.atan2(dy, dx)
-        local rayLen = 3.5
-        local cx = px + math.cos(yaw) * rayLen
-        local cy = py + math.sin(yaw) * rayLen
-        local cz = pz + slopeZ * rayLen
-        
-        local hitC = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x11)
-        
-        if hitC then
-            local numRays = 16
-            local step = (math.pi * 2) / numRays
-            local currentFacing = yaw
-            local hits = {}
-            
-            for i = 0, numRays - 1 do
-                local angle = i * step
-                local rx = px + math.cos(angle) * rayLen
-                local ry = py + math.sin(angle) * rayLen
-                hits[i] = tLine(px, py, pz + 1.0, rx, ry, cz + 1.0, 0x11)
-            end
-            
-            local bestAngle = nil
-            local minScore = 99999
-            
-            for i = 0, numRays - 1 do
-                if not hits[i] then
-                    local angle = i * step
-                    local prevIdx = (i - 1 + numRays) % numRays
-                    local nextIdx = (i + 1) % numRays
-                    local hasClearance = not hits[prevIdx] and not hits[nextIdx]
-                    
-                    local diffToGoal = math.abs((angle - yaw + math.pi) % (math.pi * 2) - math.pi)
-                    local diffToFacing = math.abs((angle - currentFacing + math.pi) % (math.pi * 2) - math.pi)
-                    
-                    local score = diffToGoal
-                    if diffToFacing > 1.57 then
-                        score = score + 10.0
-                    end
-                    if not hasClearance then
-                        score = score + 5.0
-                    end
-                    
-                    if score < minScore then
-                        minScore = score
-                        bestAngle = angle
+        local now = GetTime()
+
+        -- Check for aggressive non-quest mobs in path and steer around them
+        local os = Objects()
+        local avoidanceVectorX, avoidanceVectorY = 0, 0
+        local avoidanceWeight = 0
+
+        for i = 1, #os do
+            local o = os[i]
+            local ox, oy, oz = ObjectPosition(o)
+            if ox then
+                local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+                -- Check if mob is within 15 yards and in front of us
+                if odist < 15.0 and odist > 0.1 then
+                    local toMobX, toMobY = ox - px, oy - py
+                    local toMobDist = math.sqrt(toMobX^2 + toMobY^2)
+                    local toMobNormX, toMobNormY = toMobX / toMobDist, toMobY / toMobDist
+
+                    -- Check if mob is in front (dot product with movement direction)
+                    local moveNormX, moveNormY = dx / dist2D, dy / dist2D
+                    local dotProduct = toMobNormX * moveNormX + toMobNormY * moveNormY
+
+                    if dotProduct > 0.3 then  -- Mob is in front
+                        -- Check if mob is aggressive and not a quest objective
+                        local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
+                        local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast and GWB.QuestHandler.IsQuestieObjectiveFast(o)
+
+                        if isAggressive and not isQuestMob then
+                            -- Calculate avoidance vector (perpendicular to direction to mob)
+                            local avoidX, avoidY = -toMobNormY, toMobNormX
+                            -- Weight by distance (closer = stronger avoidance)
+                            local weight = (15.0 - odist) / 15.0
+                            avoidanceVectorX = avoidanceVectorX + avoidX * weight
+                            avoidanceVectorY = avoidanceVectorY + avoidY * weight
+                            avoidanceWeight = avoidanceWeight + weight
+                        end
                     end
                 end
             end
-            
-            if bestAngle then
-                finalX = px + math.cos(bestAngle) * 2.5
-                finalY = py + math.sin(bestAngle) * 2.5
-                finalZ = pz
+        end
+
+        -- Apply avoidance steering if needed
+        if avoidanceWeight > 0.1 then
+            local avoidNormX = avoidanceVectorX / avoidanceWeight
+            local avoidNormY = avoidanceVectorY / avoidanceWeight
+            -- Blend avoidance with goal direction (70% goal, 30% avoidance)
+            finalX = px + (dx * 0.7 + avoidNormX * dist2D * 0.3)
+            finalY = py + (dy * 0.7 + avoidNormY * dist2D * 0.3)
+            finalZ = pz + slopeZ * dist2D
+            GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
+            return
+        end
+
+        -- Use multiple ray lengths to detect obstacle boundaries
+        local rayLengths = {1.5, 2.5, 4.0, 6.0, 8.0}  -- More varied ray lengths
+        local numRays = 32  -- Increased from 16 to 32 for finer angular resolution
+        local step = (math.pi * 2) / numRays
+
+        -- Check if current path is clear at all lengths
+        local currentPathClear = true
+        for _, rayLen in ipairs(rayLengths) do
+            local cx = px + math.cos(yaw) * rayLen
+            local cy = py + math.sin(yaw) * rayLen
+            local cz = pz + slopeZ * rayLen
+            local hit = tLine(px, py, pz + 1.0, cx, cy, cz + 1.0, 0x100111)
+            if hit then
+                currentPathClear = false
+                break
             end
         end
+
+        -- If current path is clear and we have momentum, stick to it
+        if currentPathClear and lastWhiskerAngle and now - lastWhiskerTime < 1.0 then
+            local angleDiff = math.abs((yaw - lastWhiskerAngle + math.pi) % (math.pi * 2) - math.pi)
+            if angleDiff < 0.5 and lastMovementSpeed > 3.0 then
+                -- Keep current direction, no change needed
+                lastWhiskerAngle = yaw
+                lastWhiskerTime = now
+                GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
+                return
+            end
+        end
+
+        -- Path blocked, use multi-length whiskers to find best direction
+        local angleScores = {}
+        local angleClearances = {}
+
+        for i = 0, numRays - 1 do
+            local angle = i * step
+            angleScores[i] = 0
+            angleClearances[i] = 0
+
+            -- Test each angle at multiple lengths
+            for _, rayLen in ipairs(rayLengths) do
+                local rx = px + math.cos(angle) * rayLen
+                local ry = py + math.sin(angle) * rayLen
+                local rz = pz + slopeZ * rayLen
+                local hit = tLine(px, py, pz + 1.0, rx, ry, rz + 1.0, 0x100111)
+
+                if not hit then
+                    angleClearances[i] = angleClearances[i] + rayLen
+                else
+                    -- Penalize heavily if blocked at short range
+                    if rayLen == 2.0 then
+                        angleScores[i] = angleScores[i] + 100
+                    end
+                end
+            end
+
+            -- Prefer angles with longer clearance
+            angleScores[i] = angleScores[i] - angleClearances[i]
+        end
+
+        -- Find best angle considering goal direction and clearance
+        local bestAngle = nil
+        local minScore = 99999
+
+        for i = 0, numRays - 1 do
+            local angle = i * step
+            local diffToGoal = math.abs((angle - yaw + math.pi) % (math.pi * 2) - math.pi)
+
+            local score = angleScores[i] + diffToGoal
+
+            -- Bonus for angles similar to last chosen direction (momentum)
+            if lastWhiskerAngle then
+                local diffToLast = math.abs((angle - lastWhiskerAngle + math.pi) % (math.pi * 2) - math.pi)
+                if diffToLast < 0.3 then
+                    score = score - 2.0
+                end
+            end
+
+            if score < minScore then
+                minScore = score
+                bestAngle = angle
+            end
+        end
+
+        if bestAngle then
+            finalX = px + math.cos(bestAngle) * 2.5
+            finalY = py + math.sin(bestAngle) * 2.5
+            finalZ = pz
+            lastWhiskerAngle = bestAngle
+            lastWhiskerTime = now
+        else
+            -- Fallback to goal direction
+            lastWhiskerAngle = yaw
+            lastWhiskerTime = now
+        end
+
+        -- Track movement speed for momentum
+        if lastWhiskerAngle then
+            local speed = dist2D / (now - lastWhiskerTime + 0.1)
+            lastMovementSpeed = speed
+        end
     end
-    
+
     GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
 end
 
@@ -284,6 +411,15 @@ local function EZMoverTick()
     
     if dist < 1.5 then
         if ezPathIndex >= #ezPath then
+            -- Check if we have a final destination for multi-segment pathing
+            if GWB.EZMover.finalDest then
+                local finalDest = GWB.EZMover.finalDest
+                GWB.EZMover.finalDest = nil
+                -- Generate next segment towards final destination
+                GWB.EZMover:MoveToXYZ(finalDest.x, finalDest.y, finalDest.z)
+                return
+            end
+
             local tx, ty, tz = lastDestX, lastDestY, lastDestZ
             ezPath = nil
             GWB.EZMover.targetObj = nil
@@ -322,6 +458,9 @@ if GWB.Mover then
     local orig_Mover_StartMove = GWB.Mover.StartMove
 
     function GWB.Mover:MoveToXYZ(x, y, z)
+        if GWB.pauseMovementUntil and GetTime() < GWB.pauseMovementUntil then
+            return false
+        end
         if GWB.Settings.UseEZNavSafe then
             local lx, ly, lz = GWB.EZMover:GetDestXYZ()
             if lx then
@@ -340,6 +479,9 @@ if GWB.Mover then
     end
 
     function GWB.Mover:MoveToObject(obj)
+        if GWB.pauseMovementUntil and GetTime() < GWB.pauseMovementUntil then
+            return false
+        end
         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
             if orig_Mover_Stop then orig_Mover_Stop(self) end
             return GWB.EZMover:MoveToObject(obj)

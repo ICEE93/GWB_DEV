@@ -857,6 +857,40 @@ end
 
 local function ApproachOrInteractTownNPC(npcInfo)
     if not npcInfo then return end
+
+    if not GWB.TownBlacklist then GWB.TownBlacklist = {} end
+    if GWB.TownBlacklist[npcInfo.id] and GetTime() < GWB.TownBlacklist[npcInfo.id] then
+        -- Force re-eval of target if blacklisted
+        if nearbyTrainer and nearbyTrainer.id == npcInfo.id then nearbyTrainer = nil end
+        if nearbyRepair and nearbyRepair.id == npcInfo.id then nearbyRepair = nil end
+        if nearbyVendor and nearbyVendor.id == npcInfo.id then nearbyVendor = nil end
+        return
+    end
+
+    -- If the actual NPC is visible in the Object Manager, navigate to/interact with it directly!
+    local npcs = GWB.OM:FindNPCsById(npcInfo.id)
+    if npcs and #npcs > 0 then
+        if not npcInfo.firstSeenTime then npcInfo.firstSeenTime = GetTime() end
+        if GetTime() - npcInfo.firstSeenTime > 45 then
+            GWB:Print("Failed to reach NPC " .. npcInfo.id .. " for 45s (path blocked?). Blacklisting.")
+            GWB.TownBlacklist[npcInfo.id] = GetTime() + 1800 -- 30 mins
+            npcInfo.firstSeenTime = nil
+            if nearbyTrainer and nearbyTrainer.id == npcInfo.id then nearbyTrainer = nil end
+            if nearbyRepair and nearbyRepair.id == npcInfo.id then nearbyRepair = nil end
+            if nearbyVendor and nearbyVendor.id == npcInfo.id then nearbyVendor = nil end
+            return
+        end
+
+        GWB.Utils:InteractOrApproach(npcs[1], function(obj)
+            npcInfo.firstSeenTime = nil -- Success
+            ObjectInteract(obj)
+        end, 4.5)
+        return
+    else
+        npcInfo.firstSeenTime = nil -- reset if we lost sight
+    end
+
+    -- Otherwise, navigate to the town marker coordinate
     local coord = npcInfo.coord
     local px, py, pz = ObjectPosition("player")
     local dist = 9999
@@ -864,17 +898,20 @@ local function ApproachOrInteractTownNPC(npcInfo)
         dist = math.sqrt((coord.x-px)^2 + (coord.y-py)^2 + (coord.z-pz)^2)
     end
     
-    if dist < 4.5 then
-        -- Already close enough to the town marker! Try to interact with the live NPC directly.
-        local npcs = GWB.OM:FindNPCsById(npcInfo.id)
-        if npcs and #npcs > 0 then
-            GWB.Utils:InteractOrApproach(npcs[1], function(obj)
-                ObjectInteract(obj)
-            end, 4.5)
-        end
-    else
-        -- Too far away, keep navigating to the town marker
+    if dist >= 4.5 then
+        npcInfo.arrivalWaitTime = nil
         GWB.Mover:MoveToXYZ(coord.x, coord.y, coord.z)
+    else
+        if not npcInfo.arrivalWaitTime then npcInfo.arrivalWaitTime = GetTime() end
+        if GetTime() - npcInfo.arrivalWaitTime > 15 then
+            GWB:Print("Reached DB coordinates but NPC " .. npcInfo.id .. " is missing! Blacklisting.")
+            GWB.TownBlacklist[npcInfo.id] = GetTime() + 1800 -- 30 mins
+            npcInfo.arrivalWaitTime = nil
+            if nearbyTrainer and nearbyTrainer.id == npcInfo.id then nearbyTrainer = nil end
+            if nearbyRepair and nearbyRepair.id == npcInfo.id then nearbyRepair = nil end
+            if nearbyVendor and nearbyVendor.id == npcInfo.id then nearbyVendor = nil end
+            return
+        end
     end
 end
 
@@ -1012,6 +1049,8 @@ local function tick_goods()
 
     return false
 end
+local BuildTrainerQueueFromSpells
+
 local function tick_trainer()
     --print('tick_trainer')
 
@@ -1039,9 +1078,27 @@ local function tick_trainer()
     if trainerOpened then
         -- Humanize trainer interaction delay (0.8s - 2.5s)
         local interactionDelay = math.random(8, 25) / 10.0
-        if not IsClassTrainerFinished() and lastBuyTick + interactionDelay < tick then
+        if lastBuyTick + interactionDelay < tick then
             lastBuyTick = tick
-            print('learn those spells!')
+            
+            local myLvl = UnitLevel("player")
+            local myClass = select(2, UnitClass("player"))
+            local list = GWB.DB.classic.trainer_info[myClass]
+            if list then
+                local ok, spells = ShouldTrain(list, myLvl, 1.0)
+                if spells and #spells > 0 then
+                    local queue = BuildTrainerQueueFromSpells(spells)
+                    if queue and #queue > 0 then
+                        local firstSpell = queue[1]
+                        GWB:Print("Training spell:", firstSpell.name, "at index:", firstSpell.index)
+                        if Unlock then
+                            Unlock(BuyTrainerService, firstSpell.index)
+                        else
+                            BuyTrainerService(firstSpell.index)
+                        end
+                    end
+                end
+            end
         end
     end
 
@@ -1217,7 +1274,7 @@ plugin.callbacks.OnMerchantClosed = function(ctx)
     merchantOpened = false
     return
 end
-local function BuildTrainerQueueFromSpells(spells)
+function BuildTrainerQueueFromSpells(spells)
     local queue = {}
     if not ClassTrainerFrame or not ClassTrainerFrame:IsShown() then
         return queue

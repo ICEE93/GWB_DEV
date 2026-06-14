@@ -66,25 +66,44 @@ plugin.handlers = {}
 local function ConsumeBestFoodIfPossible()
     local foodId, bag, slot = GWB.Inv:FindUsableFood()
     if not foodId then return end
-    if C_Container and C_Container.UseContainerItem then
-        --print("C_Container.UseContainerItem(", bag, slot, ")")
-        Unlock(C_Container.UseContainerItem, bag, slot)
-    else
-        Unlock(UseContainerItem, bag, slot)
+    
+    if not _G.GWB_FoodBtn then
+        _G.GWB_FoodBtn = CreateFrame("Button", "GWB_FoodBtn", nil, "SecureActionButtonTemplate")
+        _G.GWB_FoodBtn:RegisterForClicks("AnyDown")
     end
+    _G.GWB_FoodBtn:SetScript("OnClick", function()
+        if C_Container and C_Container.UseContainerItem then
+            C_Container.UseContainerItem(bag, slot)
+        else
+            UseContainerItem(bag, slot)
+        end
+    end)
+    
+    local cmd = format("CLICK %s:LeftButton", "GWB_FoodBtn")
+    Unlock(RunBinding, cmd)
+    Unlock(RunBinding, cmd, "up")
 end
 
 -- FYI "Drink" AuraId: 430
 local function ConsumeBestDrinkIfPossible()
     local drinkId, bag, slot = GWB.Inv:FindUsableDrink()
-    --print("drinkIds", drinkId, bag, slot, req)
     if not drinkId then return end
-    if C_Container and C_Container.UseContainerItem then
-        --print("C_Container.UseContainerItem(", bag, slot, ")")
-        Unlock(C_Container.UseContainerItem, bag, slot)
-    else
-        Unlock(UseContainerItem, bag, slot)
+    
+    if not _G.GWB_DrinkBtn then
+        _G.GWB_DrinkBtn = CreateFrame("Button", "GWB_DrinkBtn", nil, "SecureActionButtonTemplate")
+        _G.GWB_DrinkBtn:RegisterForClicks("AnyDown")
     end
+    _G.GWB_DrinkBtn:SetScript("OnClick", function()
+        if C_Container and C_Container.UseContainerItem then
+            C_Container.UseContainerItem(bag, slot)
+        else
+            UseContainerItem(bag, slot)
+        end
+    end)
+    
+    local cmd = format("CLICK %s:LeftButton", "GWB_DrinkBtn")
+    Unlock(RunBinding, cmd)
+    Unlock(RunBinding, cmd, "up")
 end
 
 local EATING_SPELL_ID   = 433 -- "Food"
@@ -154,8 +173,16 @@ plugin.handlers.stateTick = function()
     -- just wait for 90/90 on energy/mana/hp?
 
     -- pause movement?
-    if GWB.Mover:IsMoving() then
+    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+        if GWB.EZMover:IsMoving() then
+            GWB.EZMover:Stop()
+            local px, py, pz = ObjectPosition("player")
+            if px then ClickToMove(px, py, pz) end
+        end
+    elseif GWB.Mover and GWB.Mover:IsMoving() then
         GWB.Mover:HaltMovement()
+        local px, py, pz = ObjectPosition("player")
+        if px then ClickToMove(px, py, pz) end
     end
 
     local hp = GWB.Utils.SafeNumber(UnitHealth("player"))

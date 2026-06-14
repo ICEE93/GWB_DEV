@@ -140,6 +140,9 @@ local updateDynInternal = 2
 
 -- returns true if all conditions to run waypoints are met!
 local function DoWaypoints()
+    if UnitCastingInfo("player") ~= nil or UnitChannelInfo("player") ~= nil then
+        return false
+    end
     return not inCombat and not isDedOrGhost
 end
 
@@ -261,6 +264,11 @@ function _tickTest()
         return
     end
     
+    -- Yield if any other state is active (LootHandler, RestHandler, TownHandler, etc.)
+    if GWB.State and GWB.State:getCurrentState() ~= "plugin.Waypoints" then
+        return
+    end
+    
     -- Don't interfere with post-combat looting
     if GWB.isPostCombatLooting then
         return
@@ -275,6 +283,107 @@ function _tickTest()
 
     -- Yield to QuestHandler if pursuing a quest objective
     if GWB.QuestTarget then return end
+
+    if GWB.Settings.QuestieAutopilot then
+        -- Run Autopilot navigation
+        local pin = GWB.QuestHandler and GWB.QuestHandler.GetNextQuestieWaypoint and GWB.QuestHandler.GetNextQuestieWaypoint()
+        if not pin then
+            -- No quests, stop moving
+            local now = GetTime()
+            if now - (GWB.lastAutopilotHaltLog or 0) > 5.0 then
+                GWB.lastAutopilotHaltLog = now
+                GWB:Print("[Autopilot] Halting: No quest pins found for current map.")
+            end
+            
+            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+            elseif GWB.Mover and GWB.Mover.Stop then
+                GWB.Mover:Stop()
+            end
+            
+            -- Keep facing/engaging nearby if needed
+            DoActiveEngage()
+            return
+        end
+
+        local px, py, pz = ObjectPosition("player")
+        if not px then return end
+
+        -- If it's a questgiver/finisher (complete or available), let's look for them nearby
+        if pin.type == "complete" or pin.type == "available" then
+            local objects = ObjectManager(5) or {}
+            local foundTarget = nil
+            for i = 1, #objects do
+                local obj = objects[i]
+                if ObjectExists(obj) and ObjectId(obj) == pin.id then
+                    foundTarget = obj
+                    break
+                end
+            end
+
+            -- Also check GameObjects just in case
+            if not foundTarget then
+                local gameObjs = ObjectManager(8) or {}
+                for i = 1, #gameObjs do
+                    local obj = gameObjs[i]
+                    if ObjectExists(obj) and ObjectId(obj) == pin.id then
+                        foundTarget = obj
+                        break
+                    end
+                end
+            end
+
+            if foundTarget then
+                local cx, cy, cz = ObjectPosition(foundTarget)
+                local dist = Distance(px, py, pz, cx, cy, cz)
+                if dist < 4.5 then
+                    -- Stop moving
+                    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                        GWB.EZMover:Stop()
+                    end
+                    ClickToMove(px, py, pz)
+                    
+                    -- Debounce interaction
+                    local now = GetTime()
+                    if now - (GWB.lastQuestieInteractTime or 0) > 2.0 then
+                        GWB.lastQuestieInteractTime = now
+                        ObjectInteract(foundTarget)
+                        GWB:Print("Interacting with quest NPC/Object:", ObjectName(foundTarget))
+                    end
+                else
+                    -- Move directly to the NPC/Object
+                    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                        GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                    else
+                        GWB.Mover:MoveToXYZ(cx, cy, cz)
+                    end
+                end
+                return
+            end
+        end
+
+        -- If not interacting, move towards the pin coordinate
+        local distToPin = Distance(px, py, pz, pin.wx, pin.wy, pin.wz)
+        if distToPin > 5 then
+            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                GWB.EZMover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
+            else
+                GWB.Mover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
+            end
+        else
+            -- We reached the coordinate but NPC isn't here yet, stop and wait
+            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+            end
+            ClickToMove(px, py, pz)
+        end
+
+        -- Check if there are nearby mobs to engage (if we are near an objective)
+        if pin.type ~= "complete" and pin.type ~= "available" then
+            DoActiveEngage()
+        end
+        return
+    end
 
     -- not in combat, now a good time to check up on durability and switch if needed?
     local townHandlerPlugin = GWB.plugins["TownHandler"] 

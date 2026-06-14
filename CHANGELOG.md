@@ -3,6 +3,18 @@
 All notable changes to the Generic WoW Bot (GWB) project will be documented in this file.
 
 ## [Unreleased]
+- **QuestHandler:** Implemented Target Isolation for Questie Autopilot pins. The bot will now aggressively ignore hostile mobs that belong to quests other than its active Autopilot pin.
+- **QuestHandler:** Fixed a 1-frame race condition where targeting systems would latch onto nearby mobs before the Autopilot pin could calculate during UI reload.
+- **QuestHandler:** Redesigned Autopilot scoring algorithm to prioritize active local quests regardless of level difference, preventing unwanted cross-zone navigation.
+- **QuestHandler:** Reversed quest objective prioritization to always finish active quests before turning them in or acquiring new ones.
+- **QuestHandler:** Re-enabled generic string matching for GameObject interactions, enabling support for gathering quests like Milly's Harvest.
+- **Core:** Implemented missing `InteractOrApproach` utility method in `core/utils.lua` to fix broken vendor and repair NPC interactions.
+- **RestHandler:** Converted `UseContainerItem` to simulate a hardware event via `SecureActionButtonTemplate`, properly unlocking food and water consumption.
+- **CombatHandler / Waypoints:** Halts movement and prevents pulling new targets while the player is actively casting or channeling (e.g., gathering nodes, looting).
+- **QuestHandler:** Fixed quest mob filtering in Questie Autopilot mode. The bot now properly skips non-quest mobs when Questie Autopilot is enabled, preventing unwanted combat with random creatures.
+- **CombatHandler:** Fixed autoTarget function to use OR condition instead of AND for quest filtering. This ensures quest mob filtering applies when either Questie Autopilot is enabled OR Questie integration is available.
+- **UI (Map):** Simplified Questie availability check to use QuestHandler's IsQuestieObjectiveFast function instead of direct Questie global variable access, improving reliability.
+- **UI (Map):** Added throttling to quest filter debug logs to prevent chat spam (logs once every 2 seconds instead of per mob).
 - **Core (Routine):** Implemented Advanced Routine Recorder in `routineManager.lua`. Supports auto-simplification (Douglas-Peucker) for waypoints to keep profiles small and organic.
 - **Core (Routine):** Built `Default_RoutinePlayback` plugin to handle playback of JSON-saved routines. Includes automatic gossip replication and quest acceptance/turn-in hooks.
 - **UI:** Added new Recorder UI window for profile creation (Middle-Click Minimap or click World Map 'Recorder' button).

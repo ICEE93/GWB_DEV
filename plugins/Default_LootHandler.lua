@@ -10,6 +10,7 @@ local postCombatStarted = 0
 local lastLootingCorpse = nil
 local lastLootDist = 99999
 local previousCtx = nil
+local lootedCorpses = {}
 
 plugin.cb_priority = GWB.enums.cb_priority.HIGH
 plugin.callbacks = {}
@@ -48,7 +49,15 @@ local function tickPostCombat()
     -- find a corpse if we aren't alrdy looking at one?
     if lastLootingCorpse == nil then
         -- try looting?
-        local corpses = GWB.OM:GetNearbyLootableCorpses()
+        local allCorpses = GWB.OM:GetNearbyLootableCorpses()
+        local corpses = {}
+        for _, c in ipairs(allCorpses) do
+            local ptr = ObjectPointer(c)
+            if ptr and (not lootedCorpses[ptr] or lootedCorpses[ptr] < GetTime()) then
+                table.insert(corpses, c)
+            end
+        end
+
         if #corpses == 0 then
             if GetTime() - postCombatStarted < 1.5 then
                 -- Give the server up to 1.5s to flag the corpse as lootable before we give up
@@ -165,27 +174,16 @@ end
 
 plugin.callbacks.OnLootFinished = function(ctx)
     GWB:Debug("LootHandler, OnLootFinished")
-    GWB:TickerSetState(tickerNamePostCombat, false)
-    GWB.isPostCombatLooting = false
-
-    local delay = plugin.settings.cb_delay_after_loot and plugin.settings.cb_delay_after_loot.value or 0.5
-    C_Timer.After(delay, function()
-        lastLootingCorpse = nil
-        if previousCtx then
-            local ctx2 = previousCtx
-            previousCtx = nil
-            if GWB.State:getCurrentState() == "plugin.LootHandler" then
-                GWB.State:returnState()
-            end
-            ctx2.continue()
-        end
-    end)
+    if lastLootingCorpse then
+        local ptr = ObjectPointer(lastLootingCorpse)
+        if ptr then lootedCorpses[ptr] = GetTime() + 2.5 end
+    end
+    lastLootingCorpse = nil
     return false
 end
 
 plugin.callbacks.OnLootStarted = function(ctx, autoloot)
-    local timeoutSeconds = plugin.settings.cb_post_timeout and plugin.settings.cb_post_timeout.value or 5
-    postCombatStarted = GetTime() - (timeoutSeconds + 1.5)
+    postCombatStarted = GetTime()
     if autoloot then return false end
     
     if LootFrame == nil or not LootFrame:IsVisible() then return false end

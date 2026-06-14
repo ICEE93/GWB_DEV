@@ -478,3 +478,21 @@ function GWB.Utils:InteractOrApproach(obj, onReachCallback, maxRange)
     end)
     return "moving"
 end
+
+function GWB.Utils:InteractOrApproach(obj, callback, maxDist)
+    if not ObjectExists(obj) then return end
+    maxDist = maxDist or 4.5
+    local dist = Distance("player", obj)
+    if dist <= maxDist then
+        callback(obj)
+    else
+        local cx, cy, cz = ObjectPosition(obj)
+        if cx then
+            if GWB.Mover then
+                GWB.Mover:MoveTo(cx, cy, cz)
+            else
+                ClickToMove(cx, cy, cz)
+            end
+        end
+    end
+end

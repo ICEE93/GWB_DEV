@@ -119,20 +119,26 @@ end
 
 -- Combat ticker for movement/facing
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
-    if IgnoreCombatInCurrentState() then 
+    if IgnoreCombatInCurrentState() then
         GWB:Print("CombatHandler ignoring combat (fleeing).")
-        return false 
+        return false
     end
+
+    -- Force stop ALL movement when entering combat
     if GWB.Settings.UseEZNavSafe then
         if GWB.EZMover:IsMoving() then
-            GWB:Print("CH enter combat, force stop mov")
             GWB.EZMover:Stop()
         end
     else
         if GWB.Mover:IsMoving() then
-            GWB:Print("CH enter combat, force stop mov")
             GWB.Mover:Stop()
         end
+    end
+
+    -- Also stop ClickToMove directly
+    local px, py, pz = ObjectPosition("player")
+    if px then
+        ClickToMove(px, py, pz)
     end
 
     GWB:Print("OnPlayerEnterCombat CH")
@@ -150,6 +156,7 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
 
     GWB:Print("OnPlayerLeaveCombat CH")
     combatStarted = 0
+    GWB:TickerSetState(tickerNameCombat, false) -- Fix leak!
     
     -- Clear target so waypoint ticker doesn't fight us
     if UnitIsDead("target") then
@@ -199,21 +206,44 @@ local function autoTarget()
     if not Objects or not GetFocus then print("fail") return end -- Unlocker API's
     local os = Objects()
     local old = GetFocus()
+    
+    local isAutopilot = GWB.Settings.QuestieAutopilot
+    local isQuestObjFast = GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast
+
     for i=1, #os do
         local o = os[i]
         if ObjectType(o) == 5 then
-            SetFocus(o)
-            if 
-                not UnitIsDead("focus") and 
-                UnitIsEnemy("player", "focus") and 
-                UnitCanAttack("player", "focus") and 
-                UnitExists("focus") and 
-                CheckInteractDistance("focus", 1)  
-            then
-                Unlock(TargetUnit, "focus")
-                SetFocus(old)
-                updateFacingTarget()
-                return
+            local skipTarget = false
+            if isAutopilot or isQuestObjFast then
+                local isQuest, _ = isQuestObjFast and isQuestObjFast(o)
+                if isQuestObjFast and not isQuest then
+                    skipTarget = true
+                end
+            end
+            
+            -- Defensive combat override: If the mob is attacking us, we fight back!
+            -- But NOT if we are mounted and moving (just run away)
+            local isMountedAndMoving = IsMounted and IsMounted() and GetUnitSpeed("player") > 0
+            if skipTarget and not isMountedAndMoving then
+                if UnitTarget and UnitTarget(o) == Object("player") then
+                    skipTarget = false -- override and fight back!
+                end
+            end
+            
+            if not skipTarget then
+                SetFocus(o)
+                if 
+                    not UnitIsDead("focus") and 
+                    UnitIsEnemy("player", "focus") and 
+                    UnitCanAttack("player", "focus") and 
+                    UnitExists("focus") and 
+                    CheckInteractDistance("focus", 1)  
+                then
+                    Unlock(TargetUnit, "focus")
+                    SetFocus(old)
+                    updateFacingTarget()
+                    return
+                end
             end
         end
 
@@ -223,10 +253,18 @@ end
 
 -- combat facing and distancing
 local function tickMovement()
-    -- we should also run to it?
-    GWB.Mover:Update()
-    local px, py, pz = GWB.Mover:GetPlayerPosition()
+    local px, py, pz
+    if not GWB.Settings.UseEZNavSafe then
+        GWB.Mover:Update()
+        px, py, pz = GWB.Mover:GetPlayerPosition()
+    else
+        px, py, pz = ObjectPosition("player")
+    end
+    
+    if not px then return end
+    
     local tx, ty, tz = ObjectPosition("target")
+    if not tx then return end
     local d = GWB.Utils:Distance(px, py, 0, tx, ty, 0)
     local min = plugin.settings.cb_range_min.value
     local max = plugin.settings.cb_range_max.value
@@ -267,7 +305,7 @@ local function tickCombat()
     -- Humanize reaction time for target selection
     if tick > updateLastTarget + (math.random(15, 30) / 10.0) then
         if not UnitExists("target") or not UnitCanAttack("player", "target") or UnitIsDead("target") then
-            GWB:Debug("autoTarget()")
+            -- GWB:Debug("autoTarget()") -- Removed to prevent spam
             autoTarget() -- custom target routine
             --if GWB:OnBotScanTick() then -- build-in target routine
             --    GWB.Mover:HaltMovement() -- stop if found?
@@ -316,5 +354,6 @@ end
 
 GWB:RegisterTicker(tickerNameCombat, tickCombat)
 GWB:TickerSetState(tickerNameCombat, false)
+
 
 GWB:RegisterPlugin(plugin)

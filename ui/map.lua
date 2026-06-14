@@ -272,16 +272,29 @@ function GWB:OnBotScanTick(losCheck)
                 local x, y, z = ObjectPosition(o)
                 local d = Distance(px, py, 0, x, y, 0)
                 if d < dist then
-                    -- If Questie integration is active, restrict pulling to quest objectives only
+                    -- Check if mob is in aggro range and not a quest objective
                     local isQuestieMob = true
-                    if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
-                        if Questie and QuestiePlayer and type(QuestiePlayer.currentQuestlog) == "table" then
-                            local hasActiveQuests = false
-                            for _, q in pairs(QuestiePlayer.currentQuestlog) do
-                                if type(q) == "table" and not q.isComplete then hasActiveQuests = true; break end
+                    local inAggroRange = d < 20.0  -- Typical aggro range
+
+                    if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast) then
+                        if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
+                            isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                            -- If not a quest mob and in aggro range, skip it to avoid pulling
+                            if not isQuestieMob then
+                                -- Throttle debug logging to prevent spam
+                                if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
+                                    GWB:Debug("[QuestFilter] Skipping non-quest mob in aggro range:", ObjectName(o))
+                                    GWB.lastQuestFilterLog = GetTime()
+                                end
                             end
-                            if hasActiveQuests then
-                                isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                        else
+                            -- If autopilot is enabled but QuestieHandler is not available, do not pull random mobs!
+                            if GWB.Settings.QuestieAutopilot then
+                                isQuestieMob = false
+                                if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
+                                    GWB:Debug("[QuestFilter] QuestieHandler not available, skipping", ObjectName(o))
+                                    GWB.lastQuestFilterLog = GetTime()
+                                end
                             end
                         end
                     end
@@ -353,16 +366,55 @@ local function OnStartStopToggle()
         GWB.Map:SetIsRunning(false)
 
         btnStartToggle:SetText("Start")
-        -- Halt ALL movement — both EZMover and legacy mover
+
+        -- COMPLETE SHUTDOWN: Stop ALL systems
+        -- 1. Stop all movement systems
         if GWB.EZMover then
             GWB.EZMover:Stop()
         end
-        if GWB.Mover and GWB.Mover.Stop then 
-            GWB.Mover:Stop() 
+        if GWB.Mover and GWB.Mover.Stop then
+            GWB.Mover:Stop()
         end
-        -- Force-stop the character physically
+
+        -- 2. Stop routine playback if running
+        if GWB.RoutinePlayback and GWB.RoutinePlayback:IsRunning() then
+            GWB.RoutinePlayback:Stop()
+        end
+
+        -- 3. Stop routine recording if running
+        if GWB.Routine and GWB.Routine:IsRecording() then
+            GWB.Routine:StopRecording()
+        end
+
+        -- 4. Clear quest targets
+        GWB.QuestTarget = nil
+        if GWB.QuestHandler then
+            GWB.QuestHandler.CurrentAutopilotPin = nil
+        end
+
+        -- 5. Stop all tickers (safer approach - iterate and stop individually)
+        if GWB.tickers then
+            for tickerName, _ in pairs(GWB.tickers) do
+                GWB:TickerSetState(tickerName, false)
+            end
+        end
+
+        -- 6. Clear state machine (simplified approach)
+        if GWB.State then
+            local currentState = GWB.State:getCurrentState()
+            if currentState and currentState ~= "core" then
+                GWB.State:returnState()
+            end
+        end
+
+        -- 7. Force-stop the character physically
         local x, y, z = ObjectPosition("player")
         if x then ClickToMove(x, y, z) end
+
+        -- 8. Clear any cached movement data
+        if GWB.pauseMovementUntil then
+            GWB.pauseMovementUntil = 0
+        end
     end
 end
 
