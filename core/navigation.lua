@@ -185,9 +185,9 @@ local function InitLibDraw()
                 for i = 1, #libDrawRays do
                     local ray = libDrawRays[i]
                     if ray.hit then
-                        d:SetColorRaw(255, 0, 0, 200)
+                        d:SetColorRaw(1, 0, 0, 0.8)
                     else
-                        d:SetColorRaw(0, 255, 0, 200)
+                        d:SetColorRaw(0, 1, 0, 0.8)
                     end
                     d:Line(ray.px, ray.py, ray.pz, ray.rx, ray.ry, ray.rz)
                 end

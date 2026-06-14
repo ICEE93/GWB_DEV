@@ -171,38 +171,60 @@ function ZygorProvider.IsObjective(obj)
 
     if not targetId then return false, nil end
 
-    for _, goal in ipairs(ZGV.CurrentStep.goals) do
-        -- Action types in Zygor like 'kill', 'collect', 'talk', 'accept', 'turnin', 'interact'
-        local match = false
+    local currentStepNum = ZGV.CurrentStepNum or 1
+    local steps = (ZGV.CurrentGuide and ZGV.CurrentGuide.steps) or { ZGV.CurrentStep }
+    local maxLookahead = math.min(currentStepNum + 4, #steps)
+
+    for stepIdx = currentStepNum, maxLookahead do
+        local step = steps[stepIdx]
         
-        -- Zygor IDs are often strings, must cast to number for comparison
-        local function checkIdMatch(rawId)
-            if not rawId then return false end
-            if type(rawId) == "string" and rawId:find(",") then
-                for idStr in rawId:gmatch("%d+") do
-                    if tonumber(idStr) == targetId then return true end
+        -- Try to avoid checking completely finished steps if possible
+        local stepComplete = false
+        if type(step.IsComplete) == "function" then
+            pcall(function() stepComplete = step:IsComplete() end)
+        end
+
+        if step and step.goals and not stepComplete then
+            for _, goal in ipairs(step.goals) do
+                -- Skip completed goals
+                local goalComplete = (goal.status == "complete")
+                if type(goal.IsComplete) == "function" then
+                    pcall(function() goalComplete = goalComplete or goal:IsComplete() end)
                 end
-                return false
-            else
-                return tonumber(rawId) == targetId
-            end
-        end
+                
+                if not goalComplete then
+                    local match = false
+                    
+                    local function checkIdMatch(rawId)
+                        if not rawId then return false end
+                        if type(rawId) == "string" and rawId:find(",") then
+                            for idStr in rawId:gmatch("%d+") do
+                                if tonumber(idStr) == targetId then return true end
+                            end
+                            return false
+                        else
+                            return tonumber(rawId) == targetId
+                        end
+                    end
 
-        if checkIdMatch(goal.targetid) then match = true end
-        if checkIdMatch(goal.npcid) then match = true end
-        
-        if goal.mobs then
-            for _, mob in ipairs(goal.mobs) do
-                if checkIdMatch(mob.id) then match = true; break end
-            end
-        end
+                    if checkIdMatch(goal.targetid) then match = true end
+                    if checkIdMatch(goal.npcid) then match = true end
+                    
+                    if goal.mobs then
+                        for _, mob in ipairs(goal.mobs) do
+                            if checkIdMatch(mob.id) then match = true; break end
+                        end
+                    end
 
-        if match then
-            local action = goal.action
-            if action == "kill" or action == "collect" or action == "interact" or 
-               action == "talk" or action == "accept" or action == "turnin" or 
-               action == "buy" or action == "sell" then
-                return true, (goal.target or goal.targetshort or "Zygor Target")
+                    if match then
+                        local action = goal.action
+                        if action == "kill" or action == "collect" or action == "interact" or 
+                           action == "talk" or action == "accept" or action == "turnin" or 
+                           action == "buy" or action == "sell" then
+                            return true, (goal.target or goal.targetshort or "Zygor Target")
+                        end
+                    end
+                end
             end
         end
     end
