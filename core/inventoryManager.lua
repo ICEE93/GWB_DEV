@@ -62,12 +62,103 @@ function GWB.Inv:GetBestConsumable(consumables)
     return nil
 end
 
+-- Helper function to scan bags and find the best food or drink based on tooltip parsing
+function GWB.Inv:ScanBagsForBestConsumable(isDrink)
+    local bestRestore = 0
+    local bestBag, bestSlot, bestItemId = nil, nil, nil
+    local playerLevel = UnitLevel("player") or 1
+
+    for bag = 0, 4 do
+        local numSlots = C_Container and C_Container.GetContainerNumSlots(bag) or GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local itemId = C_Container and C_Container.GetContainerItemID(bag, slot) or GetContainerItemID(bag, slot)
+            if itemId then
+                local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice, classID, subclassID = GetItemInfo(itemId)
+                
+                -- Check if player meets the level requirement
+                if not itemMinLevel or playerLevel >= itemMinLevel then
+                    local restoreAmount = 0
+                    local isCorrectType = false
+                    
+                    -- Retail / Midnight API
+                    if C_TooltipInfo and C_TooltipInfo.GetBagItem then
+                        local tooltipInfo = C_TooltipInfo.GetBagItem(bag, slot)
+                        if tooltipInfo and tooltipInfo.lines then
+                            for _, line in ipairs(tooltipInfo.lines) do
+                                if line.leftText then
+                                    local text = line.leftText
+                                    if not isDrink then
+                                        local amt = string.match(text, "Restores ([%d,]+) health.*over")
+                                        if amt then
+                                            amt = string.gsub(amt, ",", "")
+                                            restoreAmount = tonumber(amt)
+                                            isCorrectType = true
+                                        end
+                                    else
+                                        local amt = string.match(text, "([%d,]+) mana.*over")
+                                        if amt then
+                                            amt = string.gsub(amt, ",", "")
+                                            restoreAmount = tonumber(amt)
+                                            isCorrectType = true
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        -- Classic / Era API Fallback
+                        if not _G.GWB_HiddenTooltip then
+                            local tt = CreateFrame("GameTooltip", "GWB_HiddenTooltip", nil, "GameTooltipTemplate")
+                            tt:SetOwner(WorldFrame, "ANCHOR_NONE")
+                        end
+                        _G.GWB_HiddenTooltip:ClearLines()
+                        _G.GWB_HiddenTooltip:SetBagItem(bag, slot)
+                        
+                        for i = 1, _G.GWB_HiddenTooltip:NumLines() do
+                            local left = _G["GWB_HiddenTooltipTextLeft"..i]
+                            if left then
+                                local text = left:GetText()
+                                if text then
+                                    if not isDrink then
+                                        local amt = string.match(text, "Restores ([%d,]+) health.*over")
+                                        if amt then
+                                            amt = string.gsub(amt, ",", "")
+                                            restoreAmount = tonumber(amt)
+                                            isCorrectType = true
+                                        end
+                                    else
+                                        local amt = string.match(text, "([%d,]+) mana.*over")
+                                        if amt then
+                                            amt = string.gsub(amt, ",", "")
+                                            restoreAmount = tonumber(amt)
+                                            isCorrectType = true
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if isCorrectType and restoreAmount > bestRestore then
+                        bestRestore = restoreAmount
+                        bestBag = bag
+                        bestSlot = slot
+                        bestItemId = itemId
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestItemId, bestBag, bestSlot
+end
+
 function GWB.Inv:FindUsableDrink()
-    return GWB.Inv:GetBestConsumable(GWB.DB.classic.drinks)
+    return GWB.Inv:ScanBagsForBestConsumable(true)
 end
 
 function GWB.Inv:FindUsableFood() 
-    return GWB.Inv:GetBestConsumable(GWB.DB.classic.food_normal)
+    return GWB.Inv:ScanBagsForBestConsumable(false)
 end
 
 -- Function to search for a specific item in the player's bags
