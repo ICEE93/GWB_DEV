@@ -60,7 +60,9 @@ function ZygorProvider.IsObjective(obj)
         -- Action types in Zygor like 'kill', 'collect', 'talk', 'accept', 'turnin', 'interact'
         if goal.targetid == targetId then
             local action = goal.action
-            if action == "kill" or action == "collect" or action == "interact" then
+            if action == "kill" or action == "collect" or action == "interact" or 
+               action == "talk" or action == "accept" or action == "turnin" or 
+               action == "buy" or action == "sell" then
                 return true, (goal.target or goal.targetshort or "Zygor Target")
             end
         end

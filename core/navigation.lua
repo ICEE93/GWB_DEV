@@ -82,15 +82,6 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     Nn.EZ.Nav.GeneratePath(px, py, pz, targetX, targetY, targetZ, function(path)
         isGenerating = false
         if path and type(path) == "table" and #path > 1 then
-            -- Apply a consistent small offset to the entire path to prevent 
-            -- "bot trains", avoiding the zig-zag jitter of randomizing every node.
-            local offsetX = (math.random() * 1.5) - 0.75
-            local offsetY = (math.random() * 1.5) - 0.75
-            for i = 2, #path - 1 do
-                path[i].x = path[i].x + offsetX
-                path[i].y = path[i].y + offsetY
-            end
-            
             -- Trim nodes that we are already past
             while #path > 2 do
                 local node = path[2]
