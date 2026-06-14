@@ -1,4 +1,4 @@
-local Unlocker, GWB, inventory = ...
+local Nn, GWB = ...
 local plugin = {
     name = "ZygorProvider",
     author = "GWB",
@@ -17,7 +17,7 @@ local function MapPosToWorldPos(mapID, x, y)
     return nil, nil, nil
 end
 
-function ZygorProvider:GetNextWaypoint()
+function ZygorProvider.GetNextWaypoint()
     if not ZGV or not ZGV.Pointer or not ZGV.Pointer.DestinationWaypoint then
         return nil
     end
@@ -33,13 +33,13 @@ function ZygorProvider:GetNextWaypoint()
     return nil
 end
 
-function ZygorProvider:IsObjective(obj)
+function ZygorProvider.IsObjective(obj)
     if not ZGV or not ZGV.CurrentStep or not ZGV.CurrentStep.goals then
         return false, nil
     end
 
-    local unitId = Nn.ObjectUnitId(obj)
-    local objectId = Nn.ObjectId(obj)
+    local unitId = Nn.ObjectUnitId and Nn.ObjectUnitId(obj) or ObjectUnitId(obj)
+    local objectId = Nn.ObjectId and Nn.ObjectId(obj) or ObjectId(obj)
     local targetId = unitId or objectId
 
     if not targetId then return false, nil end
@@ -57,17 +57,16 @@ function ZygorProvider:IsObjective(obj)
     return false, nil
 end
 
-function plugin:OnInit()
-    if GWB.QuestHandler and GWB.QuestHandler.RegisterProvider then
-        GWB.QuestHandler:RegisterProvider("Zygor", ZygorProvider)
-    end
-end
-
--- Print integration status gracefully after a short delay
-C_Timer.After(4.0, function()
+local function PluginInit()
+    if not GWB.QuestHandler then return end
+    if not GWB.QuestHandler.RegisterProvider then return end
+    
+    GWB.QuestHandler:RegisterProvider("Zygor", ZygorProvider)
+    
     if ZGV then
         GWB:Print("[Zygor] Integration Initialized: Found Zygor Guides data structures.")
     end
-end)
+end
 
+C_Timer.After(1.0, PluginInit)
 GWB:RegisterPlugin(plugin)
