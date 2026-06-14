@@ -27,7 +27,7 @@ function ZygorProvider.GetNextWaypoint()
         -- Zygor uses normalized coordinates (e.g., 0.45)
         local wx, wy, wz = MapPosToWorldPos(wp.m, wp.x, wp.y)
         if wx and wy then
-            return { x = wx, y = wy, z = wz, mapId = wp.m, score = 100 }
+            return { x = wp.x, y = wp.y, wx = wx, wy = wy, wz = wz, mapId = wp.m, score = 100 }
         end
     end
     return nil
