@@ -224,7 +224,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     if dotProduct > 0.1 then  -- Mob is generally in front
                         -- Check if mob is aggressive and not a quest objective
                         local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
-                        local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast and GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                        local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o)
 
                         if isAggressive and not isQuestMob then
                             -- Calculate avoidance vector (perpendicular to direction to mob)

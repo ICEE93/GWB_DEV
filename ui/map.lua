@@ -288,9 +288,9 @@ function GWB:OnBotScanTick(losCheck)
                 local isQuestieMob = true
                 local inAggroRange = rawDist < 20.0
 
-                if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast) then
-                    if GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast then
-                        isQuestieMob = GWB.QuestHandler.IsQuestieObjectiveFast(o)
+                if inAggroRange and GWB.Settings.QuestieAutopilot or (GWB.QuestHandler and GWB.QuestHandler.IsObjective) then
+                    if GWB.QuestHandler and GWB.QuestHandler.IsObjective then
+                        isQuestieMob = GWB.QuestHandler:IsObjective(o)
                         if not isQuestieMob then
                             if not GWB.lastQuestFilterLog or GetTime() - GWB.lastQuestFilterLog > 2.0 then
                                 GWB:Debug("[QuestFilter] Skipping non-quest mob in aggro range:", ObjectName(o))

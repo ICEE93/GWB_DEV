@@ -286,7 +286,7 @@ function _tickTest()
 
     if GWB.Settings.QuestieAutopilot then
         -- Run Autopilot navigation
-        local pin = GWB.QuestHandler and GWB.QuestHandler.GetNextQuestieWaypoint and GWB.QuestHandler.GetNextQuestieWaypoint()
+        local pin = GWB.QuestHandler and GWB.QuestHandler.GetNextWaypoint and GWB.QuestHandler:GetNextWaypoint()
         if not pin then
             GWB.autopilotEmptyTicks = (GWB.autopilotEmptyTicks or 0) + 1
             if GWB.autopilotEmptyTicks < 15 then

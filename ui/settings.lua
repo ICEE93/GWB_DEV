@@ -34,6 +34,7 @@ function GWB:SaveSettings()
     GWB.Storage.Settings.Core.UseEZNavSafe = GWB.Settings.UseEZNavSafe
     GWB.Storage.Settings.Core.ActiveProfile = GWB.Settings.ActiveProfile
     GWB.Storage.Settings.Core.QuestieAutopilot = GWB.Settings.QuestieAutopilot
+    GWB.Storage.Settings.Core.AutopilotProvider = GWB.Settings.AutopilotProvider
 
     for pluginName, plugin in pairs(GWB.plugins) do
         if plugin.settings then
@@ -61,6 +62,9 @@ function GWB:LoadSettings()
         end
         if GWB.Storage.Settings.Core.QuestieAutopilot ~= nil then
             GWB.Settings.QuestieAutopilot = GWB.Storage.Settings.Core.QuestieAutopilot
+        end
+        if GWB.Storage.Settings.Core.AutopilotProvider ~= nil then
+            GWB.Settings.AutopilotProvider = GWB.Storage.Settings.Core.AutopilotProvider
         end
     end
 
@@ -128,15 +132,32 @@ function GWB:RebuildConfigUI()
     cbAutopilot:SetChecked(GWB.Settings.QuestieAutopilot)
     local cbAutopilotText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     cbAutopilotText:SetPoint("LEFT", cbAutopilot, "RIGHT", 5, 1)
-    cbAutopilotText:SetText("Questie Autopilot (No Waypoints)")
+    cbAutopilotText:SetText("Enable Autopilot (No Waypoints)")
     cbAutopilot:SetScript("OnClick", function(self)
         GWB.Settings.QuestieAutopilot = self:GetChecked()
-        -- Clear cached autopilot pin when toggling to force re-evaluation
         if GWB.QuestHandler then
             GWB.QuestHandler.CurrentAutopilotPin = nil
         end
         GWB:SaveSettings()
-        print("GWB: Set Questie Autopilot to " .. tostring(GWB.Settings.QuestieAutopilot))
+        print("GWB: Set Autopilot to " .. tostring(GWB.Settings.QuestieAutopilot))
+    end)
+    yOffset = yOffset - 30
+
+    local provText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    provText:SetPoint("TOPLEFT", 25, yOffset - 3)
+    provText:SetText("Autopilot Provider")
+
+    local provEb = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+    provEb:SetSize(100, 20)
+    provEb:SetPoint("TOPLEFT", 220, yOffset)
+    provEb:SetAutoFocus(false)
+    provEb:SetText(tostring(GWB.Settings.AutopilotProvider or "Questie"))
+    provEb:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+        local txt = self:GetText()
+        GWB.Settings.AutopilotProvider = txt
+        GWB:SaveSettings()
+        print("GWB: Set Autopilot Provider to: " .. txt)
     end)
     yOffset = yOffset - 30
     

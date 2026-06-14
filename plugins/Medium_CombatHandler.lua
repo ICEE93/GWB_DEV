@@ -208,15 +208,15 @@ local function autoTarget()
     local old = GetFocus()
     
     local isAutopilot = GWB.Settings.QuestieAutopilot
-    local isQuestObjFast = GWB.QuestHandler and GWB.QuestHandler.IsQuestieObjectiveFast
+    local function isQuestObjFast(o) return GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o) end
 
     for i=1, #os do
         local o = os[i]
         if ObjectType(o) == 5 then
             local skipTarget = false
-            if isAutopilot or isQuestObjFast then
-                local isQuest, _ = isQuestObjFast and isQuestObjFast(o)
-                if isQuestObjFast and not isQuest then
+            if isAutopilot then
+                local isQuest, _ = isQuestObjFast(o)
+                if not isQuest then
                     skipTarget = true
                 end
             end
