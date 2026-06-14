@@ -169,8 +169,10 @@ debugRaysFrame:SetFrameStrata("TOOLTIP")
 local debugLines = {}
 local function GetDebugLine(index)
     if not debugLines[index] then
-        debugLines[index] = debugRaysFrame:CreateLine(nil, "OVERLAY")
-        debugLines[index]:SetThickness(2)
+        debugLines[index] = debugRaysFrame:CreateTexture(nil, "OVERLAY")
+        debugLines[index]:SetTexture("Interface\\Buttons\\WHITE8x8")
+        debugLines[index]:SetBlendMode("BLEND")
+        debugLines[index]:SetSize(8, 8)
     end
     return debugLines[index]
 end
@@ -251,7 +253,46 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
 
         local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
         local lineIndex = 1
-        local uiScale = UIParent:GetEffectiveScale()
+        local w2s = WorldToScreen or (Nn and Nn.WorldToScreen)
+        local screenW = UIParent:GetWidth()
+        local screenH = UIParent:GetHeight()
+
+        -- Helper to draw a dotted line using the texture pool
+        local function DrawDottedLine(startZ, endZ, hit, rayX, rayY, rayZ)
+            if not drawDebug or not w2s then return end
+            
+            local sx1, sy1 = w2s(px, py, startZ)
+            local sx2, sy2 = w2s(rayX, rayY, endZ)
+            
+            if sx1 and sx2 then
+                -- Normalize coordinates if they are 0-1
+                if sx1 <= 1.0 and sy1 <= 1.0 then
+                    sx1, sy1 = sx1 * screenW, sy1 * screenH
+                    sx2, sy2 = sx2 * screenW, sy2 * screenH
+                end
+                
+                -- Draw 3 dots along the ray
+                for dot = 1, 3 do
+                    local t = dot / 3
+                    local dx = sx1 + (sx2 - sx1) * t
+                    local dy = sy1 + (sy2 - sy1) * t
+                    
+                    local tex = GetDebugLine(lineIndex)
+                    if hit then 
+                        tex:SetColorTexture(1, 0, 0, 0.8) 
+                    else 
+                        tex:SetColorTexture(0, 1, 0, 0.8) 
+                    end
+                    tex:ClearAllPoints()
+                    tex:SetPoint("CENTER", UIParent, "BOTTOMLEFT", dx, dy)
+                    tex:Show()
+                    lineIndex = lineIndex + 1
+                end
+            end
+        end
+
+        -- Waist level raycasts (+1.0) instead of chest/head level (+2.0)
+        local Z_OFFSET = 1.0
 
         -- Check if current path is clear up to the destination (don't check past it!)
         local currentPathClear = true
@@ -260,21 +301,10 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                 local cx = px + math.cos(yaw) * rayLen
                 local cy = py + math.sin(yaw) * rayLen
                 local cz = pz + slopeZ * rayLen
-                -- Raise ray to chest height (+2.0) to avoid clipping steep hills
-                local hit = tLine(px, py, pz + 2.0, cx, cy, cz + 2.0, 0x100111)
+                
+                local hit = tLine(px, py, pz + Z_OFFSET, cx, cy, cz + Z_OFFSET, 0x100111)
 
-                if drawDebug then
-                    local sx1, sy1 = WorldToScreen(px, py, pz + 2.0)
-                    local sx2, sy2 = WorldToScreen(cx, cy, cz + 2.0)
-                    if sx1 and sx2 then
-                        local l = GetDebugLine(lineIndex)
-                        if hit then l:SetColorTexture(1, 0, 0, 0.8) else l:SetColorTexture(0, 1, 0, 0.8) end
-                        l:SetStartPoint("BOTTOMLEFT", debugRaysFrame, sx1 / uiScale, sy1 / uiScale)
-                        l:SetEndPoint("BOTTOMLEFT", debugRaysFrame, sx2 / uiScale, sy2 / uiScale)
-                        l:Show()
-                        lineIndex = lineIndex + 1
-                    end
-                end
+                DrawDottedLine(pz + Z_OFFSET, cz + Z_OFFSET, hit, cx, cy, cz)
 
                 if hit then
                     currentPathClear = false
@@ -299,11 +329,13 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         -- Path blocked, use multi-length whiskers to find best direction
         local angleScores = {}
         local angleClearances = {}
-
-        for i = 0, numRays - 1 do
-            local angle = i * step
+        for i = 1, numRays do
             angleScores[i] = 0
             angleClearances[i] = 0
+        end
+
+        for i = 1, numRays do
+            local angle = yaw - math.pi + (i - 1) * step
 
             -- Test each angle at multiple lengths, up to a reasonable cap
             for _, rayLen in ipairs(rayLengths) do
@@ -312,21 +344,10 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     local rx = px + math.cos(angle) * rayLen
                     local ry = py + math.sin(angle) * rayLen
                     local rz = pz + slopeZ * rayLen
-                    -- Raise ray to chest height (+2.0) to avoid clipping steep hills
-                    local hit = tLine(px, py, pz + 2.0, rx, ry, rz + 2.0, 0x100111)
+                    
+                    local hit = tLine(px, py, pz + Z_OFFSET, rx, ry, rz + Z_OFFSET, 0x100111)
 
-                    if drawDebug then
-                        local sx1, sy1 = WorldToScreen(px, py, pz + 2.0)
-                        local sx2, sy2 = WorldToScreen(rx, ry, rz + 2.0)
-                        if sx1 and sx2 then
-                            local l = GetDebugLine(lineIndex)
-                            if hit then l:SetColorTexture(1, 0, 0, 0.5) else l:SetColorTexture(0, 1, 0, 0.5) end
-                            l:SetStartPoint("BOTTOMLEFT", debugRaysFrame, sx1 / uiScale, sy1 / uiScale)
-                            l:SetEndPoint("BOTTOMLEFT", debugRaysFrame, sx2 / uiScale, sy2 / uiScale)
-                            l:Show()
-                            lineIndex = lineIndex + 1
-                        end
-                    end
+                    DrawDottedLine(pz + Z_OFFSET, rz + Z_OFFSET, hit, rx, ry, rz)
 
                     if not hit then
                         angleClearances[i] = angleClearances[i] + rayLen
