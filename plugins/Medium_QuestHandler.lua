@@ -11,7 +11,7 @@ local scanTickerName = plugin.name .. "_ScanTick"
 local activeObjectives = {}
 GWB.QuestTarget = nil
 local questTargetTimeout = 0
-local SEARCH_RADIUS = 40.0
+local SEARCH_RADIUS = 100.0
 
 -- Caches the active quest objectives from the Quest Log
 local function UpdateQuestCache()

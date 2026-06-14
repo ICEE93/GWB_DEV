@@ -212,7 +212,7 @@ function ZygorProvider.IsObjective(obj)
                         local action = goal.action
                         if action == "kill" or action == "collect" or action == "interact" or 
                            action == "talk" or action == "accept" or action == "turnin" or 
-                           action == "buy" or action == "sell" then
+                           action == "buy" or action == "sell" or action == "click" then
                             return true, (goal.target or goal.targetshort or "Zygor Target")
                         end
                     end
