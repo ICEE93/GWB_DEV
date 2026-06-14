@@ -121,6 +121,22 @@ GWB.QuestHandler.IsQuestieObjectiveFast = function(obj)
                             end
                             if dropMatched then return true, quest.name or tostring(questId) end
                         end
+                        
+                        -- QuestieTooltips Direct NPC-to-Quest ID Match (The most reliable method)
+                        if typeId == 5 and QuestieLoader then
+                            local ok, QuestieTooltips = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieTooltips")
+                            if ok and QuestieTooltips and type(QuestieTooltips.tooltipLookup) == "table" then
+                                local tData = QuestieTooltips.tooltipLookup["m_" .. tostring(objId)]
+                                if type(tData) == "table" then
+                                    for qIdKey, _ in pairs(tData) do
+                                        local qIdNum = tonumber(qIdKey)
+                                        if qIdNum and QuestiePlayer.currentQuestlog[qIdNum] and not QuestiePlayer.currentQuestlog[qIdNum].isComplete then
+                                            return true, QuestiePlayer.currentQuestlog[qIdNum].name or tostring(qIdNum)
+                                        end
+                                    end
+                                end
+                            end
+                        end
 
                         -- Fallback string matching for GameObjects and NPCs with missing IDs
                         if (typeId == 5 or typeId == 8 or typeId == 3) then
