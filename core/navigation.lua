@@ -317,9 +317,6 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         local stepHeight = 0.5   -- Maximum step height in yards
         local testDist = math.min(dist2D, 10.0) -- Look ahead up to 10 yards
         
-        -- Vertical angles for arc pattern (from up to down)
-        local verticalAngles = {30, 15, 0, -15, -30, -45, -60}
-
         -- Steering angles to test (0 = straight, then progressively wider)
         local steerAngles = {0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0, 1.25, -1.25, 1.5, -1.5}
         
@@ -359,23 +356,20 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                     for _, pos in ipairs(positions) do
                         local baseX = px + fx * testDist - rx * pos.offset
                         local baseY = py + fy * testDist - ry * pos.offset
-
-                        for _, angleDeg in ipairs(verticalAngles) do
-                            local angleRad = math.rad(angleDeg)
-                            local verticalOffset = math.tan(angleRad) * testDist
-
-                            local endZ = pz + verticalOffset
-                            local hit = tLine(px, py, pz + 0.6, baseX, baseY, endZ, 0x100111)
-
-                            if hit and verticalOffset < -0.5 then
-                                -- Downward ray hit below step height, check if walkable ground
-                                local groundCheck = tLine(baseX, baseY, endZ + 0.5, baseX, baseY, endZ - 0.5, 0x100111)
-                                if groundCheck then
-                                    anyRayBlocked = true
-                                    break
-                                end
-                            elseif hit and verticalOffset >= -0.5 then
-                                -- Hit something waist/head level
+                        
+                        -- Calculate the expected Z height at the destination based on the path's slope
+                        local expectedZDrop = slopeZ * testDist
+                        
+                        -- Test Knee Height (0.5) and Chest Height (1.2)
+                        for _, zOffset in ipairs({0.5, 1.2}) do
+                            local startZ = pz + zOffset
+                            local endZ = pz + expectedZDrop + zOffset
+                            
+                            -- Trace ray parallel to the expected terrain slope
+                            local hitX, hitY, hitZ = tLine(px, py, startZ, baseX, baseY, endZ, 0x100111)
+                            
+                            -- If the ray hits anything, it means there's an obstacle sticking out of the ground!
+                            if hitX then
                                 anyRayBlocked = true
                                 break
                             end

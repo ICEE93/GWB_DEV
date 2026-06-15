@@ -120,3 +120,5 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 
 - **Waypoints:** Fixed a major issue where the bot would try to interact with NPCs or blackbox Zygor pins through ceilings/floors. It now respects the Z-axis (height) and will continue pathing to the stairs instead of getting stuck below targets on the 2D plane.
 
+- **Navigation/Whiskers:** Fixed a critical terrain bug where downward-angled whiskers (-60 degrees) would constantly hit flat ground, triggering a false-positive 'obstacle detected' state that completely disabled steering. The system now traces two parallel rays at Knee and Chest height that dynamically pitch to match the terrain slope. This allows the bot to fluidly glide up and down hills while only ever steering away from genuine protruding obstacles (walls, trees, fences).
+
