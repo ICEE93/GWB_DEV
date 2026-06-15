@@ -17,6 +17,9 @@ end
 if GWB.Settings.DebugZygor == nil then
     GWB.Settings.DebugZygor = false
 end
+if GWB.Settings.DisableCR == nil then
+    GWB.Settings.DisableCR = false
+end
 
 local configFrame = CreateFrame("Frame", "GWBConfigFrame", UIParent, "BasicFrameTemplateWithInset")
 configFrame:SetSize(480, 500)
@@ -43,6 +46,7 @@ function GWB:SaveSettings()
     GWB.Storage.Settings.Core.AutopilotProvider = GWB.Settings.AutopilotProvider
     GWB.Storage.Settings.Core.DebugWhiskers = GWB.Settings.DebugWhiskers
     GWB.Storage.Settings.Core.DebugZygor = GWB.Settings.DebugZygor
+    GWB.Storage.Settings.Core.DisableCR = GWB.Settings.DisableCR
 
     for pluginName, plugin in pairs(GWB.plugins) do
         if plugin.settings then
@@ -79,6 +83,9 @@ function GWB:LoadSettings()
         end
         if GWB.Storage.Settings.Core.DebugZygor ~= nil then
             GWB.Settings.DebugZygor = GWB.Storage.Settings.Core.DebugZygor
+        end
+        if GWB.Storage.Settings.Core.DisableCR ~= nil then
+            GWB.Settings.DisableCR = GWB.Storage.Settings.Core.DisableCR
         end
     end
 
@@ -179,6 +186,19 @@ function GWB:RebuildConfigUI()
     cbZygorText:SetText("Debug Zygor Provider")
     cbZygor:SetScript("OnClick", function(self)
         GWB.Settings.DebugZygor = self:GetChecked()
+        GWB:SaveSettings()
+    end)
+    yOffset = yOffset - 30
+
+    local cbDisableCR = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+    cbDisableCR:SetSize(24, 24)
+    cbDisableCR:SetPoint("TOPLEFT", 20, yOffset)
+    cbDisableCR:SetChecked(GWB.Settings.DisableCR)
+    local cbDisableCRText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    cbDisableCRText:SetPoint("LEFT", cbDisableCR, "RIGHT", 5, 1)
+    cbDisableCRText:SetText("Disable Internal Combat Routine")
+    cbDisableCR:SetScript("OnClick", function(self)
+        GWB.Settings.DisableCR = self:GetChecked()
         GWB:SaveSettings()
     end)
     yOffset = yOffset - 30

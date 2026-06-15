@@ -16,8 +16,8 @@ GWB:RegisterTicker(tickerName, GWB.Mover.Tick)
 
 local lastStuckCoord = nil
 local stuckCounter = 0
-local MAX_STUCK_COUNT = 20 -- Increased from 10 to 20 for less aggressive unstuck detection
-local MIN_STUCK_DIST = 0.3 -- Reduced from 0.75 to 0.3 for more lenient stuck detection
+local MAX_STUCK_COUNT = 50 -- Increased from 20 to 50 for much less aggressive unstuck detection
+local MIN_STUCK_DIST = 0.2 -- Reduced from 0.3 to 0.2 for more lenient stuck detection
 
 local unstuckX, unstuckY, unstuckZ = 0, 0, 0
 local prevX, prevY, prevZ = 0, 0, 0

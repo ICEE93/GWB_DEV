@@ -2,7 +2,7 @@ local Nn, GWB = ...
 
 local plugin = {}
 plugin.name = "DynamicDBUpdater"
-plugin.xpacs = "classic"
+plugin.xpacs = ""
 plugin.author = "Antigravity"
 plugin.cb_priority = GWB.enums.cb_priority.DEFAULT
 plugin.callbacks = {}

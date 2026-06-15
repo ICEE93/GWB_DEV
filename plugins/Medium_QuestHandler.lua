@@ -2,7 +2,8 @@ local Nn, GWB = ...
 
 local plugin = {}
 plugin.name = "QuestHandler"
-plugin.xpacs = "classic"
+-- Works on all versions
+plugin.xpacs = "classic|retail"
 plugin.author = "Antigravity"
 
 local cacheTickerName = plugin.name .. "_CacheTick"
@@ -13,18 +14,72 @@ GWB.QuestTarget = nil
 local questTargetTimeout = 0
 local SEARCH_RADIUS = 100.0
 
+-- Blacklist for NPCs we've recently interacted with (to prevent RP runaway issues)
+local interactedNPCBlacklist = {}
+local BLACKLIST_DURATION = 60 -- 1 minute in seconds
+
+-- Helper functions for blacklist management
+local function IsNPCBlacklisted(guid)
+    if not guid then return false end
+    local entry = interactedNPCBlacklist[guid]
+    if not entry then return false end
+
+    -- Check if entry has expired
+    if GetTime() > entry.expireTime then
+        interactedNPCBlacklist[guid] = nil
+        return false
+    end
+
+    return true
+end
+
+local function AddNPCToBlacklist(guid)
+    if not guid then return end
+    interactedNPCBlacklist[guid] = {
+        expireTime = GetTime() + BLACKLIST_DURATION
+    }
+end
+
+local function CleanupBlacklist()
+    local now = GetTime()
+    for guid, entry in pairs(interactedNPCBlacklist) do
+        if now > entry.expireTime then
+            interactedNPCBlacklist[guid] = nil
+        end
+    end
+end
+
 -- Caches the active quest objectives from the Quest Log
 local function UpdateQuestCache()
     activeObjectives = {}
-    local numEntries = GetNumQuestLogEntries and GetNumQuestLogEntries() or 0
-    for i = 1, numEntries do
-        local title, level, questTag, isHeader, isCollapsed, isComplete = GetQuestLogTitle(i)
-        if title and not isHeader then
-            local numObjectives = GetNumQuestLeaderBoards(i) or 0
-            for j = 1, numObjectives do
-                local text, objType, finished = GetQuestLogLeaderBoard(j, i)
-                if text and not finished then
-                    activeObjectives[text] = true
+    
+    if C_QuestLog and C_QuestLog.GetNumQuestLogEntries then
+        -- Modern WoW API (11.0+)
+        for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+            local info = C_QuestLog.GetInfo(i)
+            if info and not info.isHeader and not info.isHidden then
+                local objectives = C_QuestLog.GetQuestObjectives(info.questID)
+                if objectives then
+                    for _, obj in ipairs(objectives) do
+                        if not obj.finished then
+                            activeObjectives[obj.text] = true
+                        end
+                    end
+                end
+            end
+        end
+    else
+        -- Classic / Older API Fallback
+        local numEntries = GetNumQuestLogEntries and GetNumQuestLogEntries() or 0
+        for i = 1, numEntries do
+            local title, level, questTag, isHeader, isCollapsed, isComplete = GetQuestLogTitle(i)
+            if title and not isHeader then
+                local numObjectives = GetNumQuestLeaderBoards(i) or 0
+                for j = 1, numObjectives do
+                    local text, objType, finished = GetQuestLogLeaderBoard(j, i)
+                    if text and not finished then
+                        activeObjectives[text] = true
+                    end
                 end
             end
         end
@@ -55,15 +110,31 @@ function GWB.QuestHandler:GetActiveProvider()
 end
 
 function GWB.QuestHandler:IsObjective(obj)
+    if not obj or not ObjectExists(obj) then return false end
+    
     local provider = self:GetActiveProvider()
     if provider and provider.IsObjective then
-        return provider.IsObjective(obj)
+        local isObj, name = provider.IsObjective(obj)
+        if isObj then return true, name end
     end
+    
+    -- Fallback to Tooltip Scan
+    local oldMouseover = GetMouseover()
+    SetMouseover(obj)
+    local isTooltipObj = self.ScanTooltipForObjective("mouseover")
+    SetMouseover(oldMouseover)
+    
+    if isTooltipObj then
+        return true, "Tooltip Objective"
+    end
+    
     return false
 end
 
 function GWB.QuestHandler:GetNextWaypoint()
     local provider = self:GetActiveProvider()
+
+    
     if provider and provider.GetNextWaypoint then
         return provider.GetNextWaypoint()
     end
@@ -95,6 +166,15 @@ GWB.QuestHandler.IsQuestLogFull = function()
     return count >= maxQuests
 end
 
+local function isIncompleteObjective(text)
+    if not text then return false end
+    local cur, req = string.match(text, "(%d+)%s*/%s*(%d+)")
+    if cur and req then
+        return tonumber(cur) < tonumber(req)
+    end
+    return false
+end
+
 -- Fallback tooltip scanning (generic for all providers)
 GWB.QuestHandler.ScanTooltipForObjective = function(unit)
     if not unit then return false end
@@ -104,6 +184,9 @@ GWB.QuestHandler.ScanTooltipForObjective = function(unit)
             for _, line in ipairs(tooltipInfo.lines) do
                 if line.leftText then
                     if activeObjectives[line.leftText] then
+                        return true
+                    end
+                    if isIncompleteObjective(line.leftText) then
                         return true
                     end
                 end
@@ -116,9 +199,15 @@ GWB.QuestHandler.ScanTooltipForObjective = function(unit)
             local line = _G["GameTooltipTextLeft" .. i]
             if line then
                 local text = line:GetText()
-                if text and activeObjectives[text] then
-                    GameTooltip:Hide()
-                    return true
+                if text and string.len(text) > 3 then
+                    if activeObjectives[text] then
+                        GameTooltip:Hide()
+                        return true
+                    end
+                    if isIncompleteObjective(text) then
+                        GameTooltip:Hide()
+                        return true
+                    end
                 end
             end
         end
@@ -131,10 +220,13 @@ end
 local function ScanNearbyObjectives()
     -- Only scan if the bot is actually running
     if not GWB.Map:IsRunning() then return end
-    
+
     -- Don't scan if we are busy looting or in combat
     if GWB.isPostCombatLooting or UnitAffectingCombat("player") then return end
-    
+
+    -- Cleanup blacklist periodically
+    CleanupBlacklist()
+
     -- If we already have a valid target and it hasn't timed out, verify it
     if GWB.QuestTarget then
         if GetTime() > questTargetTimeout then
@@ -144,7 +236,7 @@ local function ScanNearbyObjectives()
             GWB.QuestTarget = nil
         else
             -- We are still pursuing a valid quest target
-            
+
             -- If it's a game object, check if we are close enough to interact
             if ObjectType(GWB.QuestTarget) == 8 then
                 local px, py, pz = ObjectPosition("player")
@@ -154,16 +246,21 @@ local function ScanNearbyObjectives()
                     if dist < 5.0 then
                         -- Stop moving and interact
                         ClickToMove(px, py, pz)
-                        
-                        local isCasting = UnitCastingInfo and UnitCastingInfo("player")
-                        local isChanneling = UnitChannelInfo and UnitChannelInfo("player")
-                        
+
+                        local isCasting = (UnitCastingInfo and UnitCastingInfo("player")) or (C_Spell and C_Spell.GetUnitCastingInfo and C_Spell.GetUnitCastingInfo("player"))
+                        local isChanneling = (UnitChannelInfo and UnitChannelInfo("player")) or (C_Spell and C_Spell.GetUnitChannelInfo and C_Spell.GetUnitChannelInfo("player"))
+
                         local now = GetTime()
                         if not isCasting and not isChanneling and now - (GWB.lastQuestInteractTime or 0) > 1.5 then
                             ObjectInteract(GWB.QuestTarget)
                             GWB.lastQuestInteractTime = now
+                            -- Add NPC to blacklist after interaction
+                            local targetGuid = ObjectPointer(GWB.QuestTarget)
+                            if targetGuid then
+                                AddNPCToBlacklist(targetGuid)
+                            end
                         end
-                        
+
                         questTargetTimeout = now + 5 -- give it 5s to finish interacting
                     else
                         -- Keep moving towards it
@@ -171,6 +268,47 @@ local function ScanNearbyObjectives()
                             GWB.EZMover:MoveToXYZ(cx, cy, cz)
                         else
                             GWB.Mover:MoveToXYZ(cx, cy, cz)
+                        end
+                    end
+                end
+            -- If it's a friendly NPC, check if we are close enough to interact
+            elseif ObjectType(GWB.QuestTarget) == 5 then
+                local oldMouseover = GetMouseover()
+                SetMouseover(GWB.QuestTarget)
+                local isFriendly = not UnitCanAttack("player", "mouseover")
+                SetMouseover(oldMouseover)
+
+                if isFriendly then
+                    local px, py, pz = ObjectPosition("player")
+                    local cx, cy, cz = ObjectPosition(GWB.QuestTarget)
+                    if px and cx then
+                        local dist = math.sqrt((cx-px)^2 + (cy-py)^2 + (cz-pz)^2)
+                        if dist < 5.0 then
+                            -- Stop moving and interact
+                            ClickToMove(px, py, pz)
+
+                            local isCasting = (UnitCastingInfo and UnitCastingInfo("player")) or (C_Spell and C_Spell.GetUnitCastingInfo and C_Spell.GetUnitCastingInfo("player"))
+                            local isChanneling = (UnitChannelInfo and UnitChannelInfo("player")) or (C_Spell and C_Spell.GetUnitChannelInfo and C_Spell.GetUnitChannelInfo("player"))
+
+                            local now = GetTime()
+                            if not isCasting and not isChanneling and now - (GWB.lastQuestInteractTime or 0) > 1.5 then
+                                ObjectInteract(GWB.QuestTarget)
+                                GWB.lastQuestInteractTime = now
+                                -- Add NPC to blacklist after interaction
+                                local targetGuid = ObjectPointer(GWB.QuestTarget)
+                                if targetGuid then
+                                    AddNPCToBlacklist(targetGuid)
+                                end
+                            end
+
+                            questTargetTimeout = now + 5 -- give it 5s to finish interacting
+                        else
+                            -- Keep moving towards it
+                            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                                GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                            else
+                                GWB.Mover:MoveToXYZ(cx, cy, cz)
+                            end
                         end
                     end
                 end
@@ -194,57 +332,76 @@ local function ScanNearbyObjectives()
                     local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
                     
                     if dist <= SEARCH_RADIUS then
-                        local isQuestieObj, questName = GWB.QuestHandler:IsObjective(obj)
-                        local matchFound = false
-                        
-                        if isQuestieObj then
-                            matchFound = true
-                            GWB:Print("[Autopilot] Found objective for: " .. tostring(questName))
-                        else
-                            -- Fallback to Tooltip Check
-                            Nn.SetMouseover(obj)
-                            
-                            -- In Classic, GameTooltipTextLeftX holds the lines
-                            for lineNum = 1, 6 do
-                                local fontString = _G["GameTooltipTextLeft" .. lineNum]
-                                if fontString and fontString.GetText then
-                                    local text = fontString:GetText()
-                                    if text and string.len(text) > 3 then
-                                        if activeObjectives[text] then
-                                            matchFound = true
-                                            break
+                        -- Check if the unit is dead before trying to engage it as a quest target
+                        local skipObj = false
+                        if typeId == 5 then
+                            local oldMouseover = GetMouseover()
+                            SetMouseover(obj)
+                            if UnitIsDead("mouseover") then
+                                skipObj = true
+                            end
+                            SetMouseover(oldMouseover)
+                        end
+
+                        if not skipObj then
+                            -- Check if NPC is blacklisted
+                            local objGuid = ObjectPointer(obj)
+                            if objGuid and IsNPCBlacklisted(objGuid) then
+                                skipObj = true
+                            end
+
+                            if not skipObj then
+                                local isQuestObj, questName = GWB.QuestHandler:IsObjective(obj)
+                                if isQuestObj then
+                                    GWB.QuestTarget = obj
+                                    questTargetTimeout = GetTime() + 15 -- Give it 15 seconds to reach/engage
+                                    GWB:Debug("Found Quest Objective:", ObjectName(obj))
+
+                                    -- Check if the NPC is friendly or hostile
+                                    local isFriendly = false
+                                    if typeId == 5 then
+                                        local oldMouseover = GetMouseover()
+                                        SetMouseover(obj)
+                                        isFriendly = not UnitCanAttack("player", "mouseover")
+                                        SetMouseover(oldMouseover)
+                                    end
+
+                                    -- Tell the mover to approach
+                                    if typeId == 5 then
+                                        if isFriendly then
+                                            -- It's a friendly NPC (quest turn-in/accept), move to it and interact
+                                            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                                                GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                                            else
+                                                GWB.Mover:MoveToXYZ(cx, cy, cz)
+                                            end
+                                        else
+                                            -- It's a hostile NPC, target it so CombatHandler takes over
+                                            if Unlock and TargetUnit then
+                                                local oldMouseover = GetMouseover()
+                                                SetMouseover(obj)
+                                                Unlock(TargetUnit, "mouseover")
+                                                SetMouseover(oldMouseover)
+                                            end
+
+                                            -- Move to it to initiate engagement
+                                            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                                                GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                                            else
+                                                GWB.Mover:MoveToXYZ(cx, cy, cz)
+                                            end
                                         end
-                                        
-                                        -- Fallback check for standard Classic objective format e.g. " 0/8"
-                                        if string.find(text, "%d+/%d+") then
-                                            matchFound = true
-                                            break
+                                    else
+                                        -- It's a GameObject, walk to it and interact
+                                        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                                            GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                                        else
+                                            GWB.Mover:MoveToXYZ(cx, cy, cz)
                                         end
                                     end
+                                    return -- Stop scanning once we find one
                                 end
                             end
-                        end
-                        
-                        if matchFound then
-                            GWB.QuestTarget = obj
-                            questTargetTimeout = GetTime() + 15 -- Give it 15 seconds to reach/engage
-                            GWB:Debug("Found Quest Objective:", ObjectName(obj))
-                            
-                            -- Tell the mover to approach
-                            if typeId == 5 then
-                                -- It's a Unit, try to target it so CombatHandler takes over
-                                if Unlock and TargetUnit then
-                                    Unlock(TargetUnit, "mouseover")
-                                end
-                            else
-                                -- It's a GameObject, walk to it and interact
-                                if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                                    GWB.EZMover:MoveToXYZ(cx, cy, cz)
-                                else
-                                    GWB.Mover:MoveToXYZ(cx, cy, cz)
-                                end
-                            end
-                            return -- Stop scanning once we find one
                         end
                     end
                 end

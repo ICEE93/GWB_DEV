@@ -4,8 +4,8 @@ local Nn, GWB = ...
 local plugin = {}
 plugin.name = "TownHandler"
 
--- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "classic" 
+-- Works on all versions
+plugin.xpacs = "" 
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "Unknown"
@@ -723,6 +723,9 @@ local function ShouldVendor(itemID, quality)
 
     -- Always sell poor (grey) items regardless of if we looted them
     if quality == 0 then return true end
+    
+    -- Prevent selling Uncommon (Green) or higher quality items
+    if quality >= 2 then return false end
 
     -- Prevent selling valuable auction house items
     local itemName, _, _, _, _, _, _, _, _, _, _, classID = GetItemInfo(itemID)

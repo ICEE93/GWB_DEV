@@ -77,8 +77,10 @@ local function _update()
 
 
     -- combat
-    combatHandler.settings.cb_range_min.value = 0.1
-    combatHandler.settings.cb_range_max.value = 5
+    if combatHandler and combatHandler.settings then
+        combatHandler.settings.cb_range_min.value = 0.1
+        combatHandler.settings.cb_range_max.value = 5
+    end
 
     -- #==============================#
     -- #         Rest Handler         #

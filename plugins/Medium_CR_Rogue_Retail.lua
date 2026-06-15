@@ -2,10 +2,10 @@ local Nn, GWB = ...
 
 -- plugin object eh
 local plugin = {}
-plugin.name = "CR_Rogue_Classic"
+plugin.name = "CR_Rogue_Retail"
 
--- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "classic|tbc|wotlk|cata" 
+-- Retail only
+plugin.xpacs = "retail|legion|tww"
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "Unknown"
@@ -20,22 +20,29 @@ plugin.callbacks = {}
 
 -- locals
 local SinisterStrike = 1752
-local Eviscerate = 2098
-local Throw = 2764
+local Eviscerate = 196819
 
---local buildInfo = GetBuildInfo()
---local buildVersion, buildNumber, buildDate, interfaceVersion, localizedVersion, buildInfo = GetBuildInfo()  -- Mainline
-local buildVersion, buildNumber, buildDate, interfaceVersion, localizedVersion, buildInfo, currentVersion = GetBuildInfo()  -- Classic
+local buildVersion, buildNumber, buildDate, interfaceVersion, localizedVersion, buildInfo, currentVersion = GetBuildInfo()
 local function IsPlayerRogue()
-    if interfaceVersion < 11500 or interfaceVersion > 12000 then
-        return false -- this aint Classic bruv!
+    if interfaceVersion < 100000 then
+        return false -- this aint Retail bruv!
     end
     return select(2, UnitClass("player")) == "ROGUE"
 end
 
+-- Helper function to unwrap secret values in retail
+local function SafeUnwrap(value)
+    if not value then return value end
+    -- Check if value is a secret value using Nn.issecretvalue
+    if Nn and Nn.issecretvalue and Nn.issecretvalue(value) then
+        return Nn.secretunwrap(value)
+    end
+    return value
+end
+
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     if GWB.Settings.DisableCR or not IsPlayerRogue() then return false end
-    
+
     GWB:Debug("Rogue Combat CR enabled!")
     GWB:TickerSetState(tickerNameCombat, true)
     GWB:TickerSetState(tickerNameRested, false)
@@ -43,7 +50,7 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
 end
 plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     if GWB.Settings.DisableCR or not IsPlayerRogue() then return false end
-    
+
     GWB:Debug("Rogue Rested CR enabled!")
     GWB:TickerSetState(tickerNameCombat, false)
     GWB:TickerSetState(tickerNameRested, true)
@@ -67,6 +74,7 @@ local function ShouldNotCast()
         return true -- alrdy channeling
     end
     local curr, _, _, _ = GetUnitSpeed("player")
+    curr = SafeUnwrap(curr)
     if curr ~= 0 then
         return true -- moving
     end
@@ -81,35 +89,67 @@ end
 
 local function tickRested()
     if not GWB.Map:IsRunning() then return end
-    if 
-        not UnitExists("target") or 
-        UnitIsDead("target") or
-        not UnitCanAttack("player", "target")
-    then 
-        lastAttackTarget = nil
-        return -- skip
-    end
 
-    local dist = Distance("player", "target")
-    if dist and dist > 8 and dist <= 30 then
-        local rangedItemId = GetInventoryItemID("player", 18)
-        if rangedItemId then
-            if IsSpellKnown(Throw) or IsUsableSpell("Throw") then
-                if not ShouldCast() then return end
-                -- Stop movement and pause it for 1.2 seconds to allow the cast
-                GWB.pauseMovementUntil = GetTime() + 1.2
-                if GWB.EZMover and GWB.EZMover.Stop then
-                    GWB.EZMover:Stop()
-                elseif GWB.Mover and GWB.Mover.Stop then
-                    GWB.Mover:Stop()
+    -- Check for quest mobs that we should engage even if neutral
+    local isQuestMobInRange = false
+    if GWB.QuestHandler and GWB.QuestHandler.IsObjective then
+        local os = Objects()
+        local px, py, pz = ObjectPosition("player")
+        px, py, pz = SafeUnwrap(px), SafeUnwrap(py), SafeUnwrap(pz)
+        for i=1, #os do
+            local o = os[i]
+            if ObjectType(o) == 5 then
+                if GWB.QuestHandler:IsObjective(o) and not UnitIsDead(o) and UnitCanAttack("player", o) then
+                    local ox, oy, oz = ObjectPosition(o)
+                    ox, oy, oz = SafeUnwrap(ox), SafeUnwrap(oy), SafeUnwrap(oz)
+                    if px and ox then
+                        local dist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+                        if dist <= 8 then -- Melee range for rogue
+                            isQuestMobInRange = true
+                            break
+                        end
+                    end
                 end
-                local px, py, pz = ObjectPosition("player")
-                if px then ClickToMove(px, py, pz) end
-                Unlock(CastSpellByName, "Throw")
-                RandomizeNextCast()
-                return
             end
         end
+    end
+
+    if
+        not UnitExists("target") or
+        UnitIsDead("target") or
+        not UnitCanAttack("player", "target")
+    then
+        lastAttackTarget = nil
+        -- If we have a quest mob in melee range, target it
+        if isQuestMobInRange then
+            local os = Objects()
+            local px, py, pz = ObjectPosition("player")
+            px, py, pz = SafeUnwrap(px), SafeUnwrap(py), SafeUnwrap(pz)
+            local closestQuestMob = nil
+            local closestDist = 999
+            for i=1, #os do
+                local o = os[i]
+                if ObjectType(o) == 5 then
+                    if GWB.QuestHandler:IsObjective(o) and not UnitIsDead(o) and UnitCanAttack("player", o) then
+                        local ox, oy, oz = ObjectPosition(o)
+                        ox, oy, oz = SafeUnwrap(ox), SafeUnwrap(oy), SafeUnwrap(oz)
+                        if px and ox then
+                            local dist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+                            if dist <= 8 and dist < closestDist then
+                                closestDist = dist
+                                closestQuestMob = o
+                            end
+                        end
+                    end
+                end
+            end
+            if closestQuestMob then
+                Unlock(TargetUnit, closestQuestMob)
+                lastAttackTarget = UnitGUID(closestQuestMob)
+                Unlock(StartAttack)
+            end
+        end
+        return -- skip
     end
 
     -- Only call StartAttack once per target, not every tick
@@ -122,7 +162,9 @@ local function tickRested()
     if not ShouldCast() then return end
 
     local energy = UnitPower("player", 3)
+    energy = SafeUnwrap(energy)
     local cp = GetComboPoints("player", "target")
+    cp = SafeUnwrap(cp)
 
     if cp >= 2 and energy >= 35 then
         Unlock(CastSpellByName, "Eviscerate")
@@ -135,18 +177,20 @@ end
 local function tickCombat()
     if not GWB.Map:IsRunning() then return end
     -- target is ok?
-    if 
-        not UnitExists("target") or 
+    if
+        not UnitExists("target") or
         UnitIsDead("target") or
         not UnitCanAttack("player", "target")
-    then 
+    then
         return -- skip
     end
 
     if not ShouldCast() then return end
 
     local energy = UnitPower("player", 3)
+    energy = SafeUnwrap(energy)
     local cp = GetComboPoints("player", "target")
+    cp = SafeUnwrap(cp)
 
     if cp >= 2 and energy >= 35 then
         Unlock(CastSpellByName, "Eviscerate")
@@ -165,7 +209,7 @@ GWB:RegisterPlugin(plugin)
 -- make sure one of the tickers is always on without event triggers
 local function OnLoad()
     if IsPlayerRogue() then
-        GWB:Print("CR Rogue Classic enabled!")
+        GWB:Print("CR Rogue Retail enabled!")
     end
     if UnitAffectingCombat("player") then
         GWB:TickerSetState(tickerNameCombat, true)

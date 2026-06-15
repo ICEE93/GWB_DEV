@@ -253,7 +253,10 @@ local function ExecQuestTurnin(step)
             Nn.Unlock(QuestFrameCompleteQuestButton.Click, QuestFrameCompleteQuestButton)
         end
     elseif GossipFrame and GossipFrame:IsShown() then
-        local numQuests = GetNumGossipActiveQuests()
+        local numQuests = 0
+        if type(GetNumGossipActiveQuests) == "function" then
+            numQuests = GetNumGossipActiveQuests() or 0
+        end
         if numQuests > 0 then
             if Nn.Unlock then
                 Nn.Unlock(SelectGossipActiveQuest, 1)

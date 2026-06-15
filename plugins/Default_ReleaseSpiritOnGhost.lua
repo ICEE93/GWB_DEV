@@ -92,31 +92,86 @@ end
 
 local lastCorpseUpdate = 0
 local function TickGhostWalk()
-    -- plug walk :3
-    
-    local tick = GetTime()
-    -- added lastCorpseUpdate as we may want to poll new pos
-    -- as our player may fall off a cliff, making it possible
-    -- for a uncreachable 'next' point
-    --print(tick, ">", lastCorpseUpdate+2)
-    if not corpseTargetSet or tick > lastCorpseUpdate+2 then
-        -- GetCorpsePosition
-        local cx, cy, cz = GetCorpsePosition()
-        GWB:Print("TickGhostWalk, set CorposePos", cx, cy, cz)
-        corpseTargetSet = GWB.Mover:MoveToXYZ(cx, cy, cz)
-        lastCorpseUpdate = tick
-    else
-        local isMoving = GWB.Mover:IsMoving()
-        --GWB:Print("TickGhostWalk, isMoving", isMoving)
-        if not isMoving then
-            -- accept corpse?
-            if StaticPopup1Button1 ~= nil then
-                GWB:Print("Taking ress?")
+    if not UnitIsDeadOrGhost("player") then
+        return
+    end
+
+    local cx, cy, cz = GetCorpsePosition()
+    if not cx then return end
+
+    local px, py, pz = ObjectPosition("player")
+    if px then
+        local distToCorpse = math.sqrt((cx-px)^2 + (cy-py)^2 + (cz-pz)^2)
+        
+        -- If we are within resurrection range, check if it's safe to res early
+        if distToCorpse <= 38.0 then
+            local isSafe = true
+            local os = Objects()
+            local oldFocus = GetFocus()
+            
+            for i=1, #os do
+                local o = os[i]
+                if ObjectType(o) == 5 then
+                    SetFocus(o)
+                    if not UnitIsDead("focus") and UnitCanAttack("player", "focus") then
+                        local mx, my, mz = ObjectPosition(o)
+                        if mx then
+                            local distToMob = math.sqrt((mx-px)^2 + (my-py)^2 + (mz-pz)^2)
+                            -- Require 22 yards of safety
+                            if distToMob < 22.0 then
+                                isSafe = false
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+            
+            SetFocus(oldFocus)
+            
+            local canRes = StaticPopup1Button1 and StaticPopup1Button1:IsVisible()
+            
+            if isSafe and canRes then
+                GWB:Print("Safe spot found! Taking ress.")
+                if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                    if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+                elseif GWB.Mover then
+                    if GWB.Mover:IsMoving() then GWB.Mover:Stop() end
+                end
+                
                 Unlock(StaticPopup1Button1.Click, StaticPopup1Button1)
+                return
             end
         end
     end
 
+    local tick = GetTime()
+    if not corpseTargetSet or tick > lastCorpseUpdate+2 then
+        GWB:Print("TickGhostWalk, set CorposePos", cx, cy, cz)
+        
+        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+            corpseTargetSet = GWB.EZMover:MoveToXYZ(cx, cy, cz)
+        else
+            corpseTargetSet = GWB.Mover:MoveToXYZ(cx, cy, cz)
+        end
+        lastCorpseUpdate = tick
+    else
+        local isMoving = false
+        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+            isMoving = GWB.EZMover:IsMoving()
+        elseif GWB.Mover then
+            isMoving = GWB.Mover:IsMoving()
+        end
+        
+        if not isMoving then
+            -- We arrived exactly at the corpse, or pathing failed. Take res anyway if possible.
+            local canRes = StaticPopup1Button1 and StaticPopup1Button1:IsVisible()
+            if canRes then
+                GWB:Print("Arrived at corpse (or stuck). Taking ress anyway.")
+                Unlock(StaticPopup1Button1.Click, StaticPopup1Button1)
+            end
+        end
+    end
 end
 
 plugin.handlers.stateTick = function()

@@ -185,11 +185,11 @@ local function InitLibDraw()
                 for i = 1, #libDrawRays do
                     local ray = libDrawRays[i]
                     if ray.hit then
-                        d:SetColorRaw(1, 0, 0, 0.8)
+                        d:SetColorRaw(1, 0, 0, 1)
                     else
-                        d:SetColorRaw(0, 1, 0, 0.8)
+                        d:SetColorRaw(0, 1, 0, 1)
                     end
-                    d:Line(ray.px, ray.py, ray.pz, ray.rx, ray.ry, ray.rz)
+                    pcall(function() d:Line(ray.px, ray.py, ray.pz, ray.rx, ray.ry, ray.rz) end)
                 end
             end)
             return true
@@ -198,7 +198,7 @@ local function InitLibDraw()
     return false
 end
 
-local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
+local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteraction)
     if UnitIsDeadOrGhost("player") then
         GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
         return
@@ -221,13 +221,18 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         local avoidanceVectorX, avoidanceVectorY = 0, 0
         local avoidanceWeight = 0
 
+        -- Use more aggressive avoidance for quest interactions (turn-in/accept)
+        local avoidanceRange = isQuestInteraction and 40.0 or 25.0
+        local avoidanceStrength = isQuestInteraction and 0.85 or 0.7
+        local goalStrength = isQuestInteraction and 0.15 or 0.3
+
         for i = 1, #os do
             local o = os[i]
             local ox, oy, oz = ObjectPosition(o)
             if ox then
                 local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
-                -- Check if mob is within 25 yards (aggro range is 20) and in front of us
-                if odist < 25.0 and odist > 0.1 then
+                -- Check if mob is within avoidance range and in front of us
+                if odist < avoidanceRange and odist > 0.1 then
                     local toMobX, toMobY = ox - px, oy - py
                     local toMobDist = math.sqrt(toMobX^2 + toMobY^2)
                     local toMobNormX, toMobNormY = toMobX / toMobDist, toMobY / toMobDist
@@ -236,16 +241,30 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
                     local moveNormX, moveNormY = dx / dist2D, dy / dist2D
                     local dotProduct = toMobNormX * moveNormX + toMobNormY * moveNormY
 
-                    if dotProduct > 0.1 then  -- Mob is generally in front
+                    -- If we are doing a quest turn in/accept, we want to detour around ANY hostile mob
+                    if dotProduct > 0.1 or isQuestInteraction then
                         -- Check if mob is aggressive and not a quest objective
                         local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
                         local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o)
 
                         if isAggressive and not isQuestMob then
-                            -- Calculate avoidance vector (perpendicular to direction to mob)
-                            local avoidX, avoidY = -toMobNormY, toMobNormX
+                            -- Calculate avoidance vector (perpendicular to direction to mob, or directly away if very close)
+                            local avoidX, avoidY
+                            if isQuestInteraction and odist < 15.0 then
+                                -- If we are very close, push directly away from them instead of just perpendicular
+                                avoidX, avoidY = -toMobNormX, -toMobNormY
+                            else
+                                avoidX, avoidY = -toMobNormY, toMobNormX
+                            end
+                            
                             -- Weight by distance (closer = stronger avoidance)
-                            local weight = (25.0 - odist) / 25.0
+                            local weight = (avoidanceRange - odist) / avoidanceRange
+                            
+                            -- Exponential weight if we are walking to a turn-in so we heavily detour
+                            if isQuestInteraction then
+                                weight = weight * weight * 3.0
+                            end
+                            
                             avoidanceVectorX = avoidanceVectorX + avoidX * weight
                             avoidanceVectorY = avoidanceVectorY + avoidY * weight
                             avoidanceWeight = avoidanceWeight + weight
@@ -259,145 +278,187 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz)
         if avoidanceWeight > 0.1 then
             local avoidNormX = avoidanceVectorX / avoidanceWeight
             local avoidNormY = avoidanceVectorY / avoidanceWeight
-            -- Blend avoidance with goal direction (30% goal, 70% avoidance for strong steering)
-            finalX = px + (dx * 0.3 + avoidNormX * dist2D * 0.7)
-            finalY = py + (dy * 0.3 + avoidNormY * dist2D * 0.7)
-            finalZ = pz + slopeZ * dist2D
-            GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
-            return
+
+            -- Validate that the avoidance direction leads to walkable ground
+            local testDist = 5.0
+            local testX = px + avoidNormX * testDist
+            local testY = py + avoidNormY * testDist
+            local testZ = pz + slopeZ * testDist
+
+            -- Check if the avoidance direction is walkable
+            local groundHit = tLine(testX, testY, testZ + 10.0, testX, testY, testZ - 10.0, 0x100111)
+            if groundHit then
+                -- Avoidance direction leads to ground, use it
+                -- Blend avoidance with goal direction (more aggressive for quest interactions)
+                finalX = px + (dx * goalStrength + avoidNormX * dist2D * avoidanceStrength)
+                finalY = py + (dy * goalStrength + avoidNormY * dist2D * avoidanceStrength)
+                finalZ = pz + slopeZ * dist2D
+                GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
+                return
+            else
+                -- Avoidance direction leads to unwalkable terrain, fall back to goal direction
+                GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
+                return
+            end
         end
 
-        -- Use multiple ray lengths to detect obstacle boundaries
-        local rayLengths = {1.5, 2.5, 4.0, 6.0, 8.0}  -- More varied ray lengths
-        local numRays = 32  -- Increased from 16 to 32 for finer angular resolution
-        local step = (math.pi * 2) / numRays
+        -- Forward Whisker Array with Arc Pattern
+        -- Cast rays in a fan shape from up to down to detect obstacles at different heights
+        local charRadius = 0.5  -- WoW character collision radius in yards
+        local stepHeight = 0.5   -- Maximum step height in yards
 
+        -- Calculate Forward (F) and Right (R) directional vectors
+        local fx = math.cos(yaw)
+        local fy = math.sin(yaw)
+        local rx = math.sin(yaw)
+        local ry = -math.cos(yaw)
+
+        -- Vertical angles for arc pattern (from up to down in degrees, converted to radians)
+        local verticalAngles = {30, 15, 0, -15, -30, -45, -60}  -- Up to down
+        local testDistances = {2.0, 4.0, 6.0, 10.0}
         local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
         if drawDebug then
             InitLibDraw()
             wipe(libDrawRays)
         end
 
-        -- Waist level raycasts (+1.0) instead of chest/head level (+2.0)
-        local Z_OFFSET = 1.0
+        local pathBlocked = false
+        local bestSteerAngle = 0
+        local bestClearance = 0
 
-        -- Check if current path is clear up to the destination (don't check past it!)
-        local currentPathClear = true
-        for _, rayLen in ipairs(rayLengths) do
-            if rayLen <= dist2D + 0.5 then
-                local cx = px + math.cos(yaw) * rayLen
-                local cy = py + math.sin(yaw) * rayLen
-                local cz = pz + slopeZ * rayLen
-                
-                local hit = tLine(px, py, pz + Z_OFFSET, cx, cy, cz + Z_OFFSET, 0x100111)
+        for _, dist in ipairs(testDistances) do
+            if dist <= dist2D + 1.0 then
+                local anyRayBlocked = false
 
-                if drawDebug then
-                    libDrawRays[#libDrawRays + 1] = {px = px, py = py, pz = pz + Z_OFFSET, rx = cx, ry = cy, rz = cz + Z_OFFSET, hit = hit}
-                end
+                -- Cast rays in arc pattern for center, left, and right positions
+                local positions = {
+                    {offset = 0, name = "center"},
+                    {offset = -charRadius, name = "left"},
+                    {offset = charRadius, name = "right"}
+                }
 
-                if hit then
-                    currentPathClear = false
-                    break
-                end
-            end
-        end
+                for _, pos in ipairs(positions) do
+                    local baseX = px + fx * dist - rx * pos.offset
+                    local baseY = py + fy * dist - ry * pos.offset
 
-        -- If current path is clear and we have momentum, stick to it
-        if currentPathClear and lastWhiskerAngle and now - lastWhiskerTime < 1.0 then
-            local angleDiff = math.abs((yaw - lastWhiskerAngle + math.pi) % (math.pi * 2) - math.pi)
-            if angleDiff < 0.5 and lastMovementSpeed > 3.0 then
-                -- Keep current direction, no change needed
-                lastWhiskerAngle = yaw
-                lastWhiskerTime = now
-                -- No need to hide lines manually, LibDraw Sync handles clearing
-                GWB.EZMover:ClickToMoveSafeZ(wx, wy, wz)
-                return
-            end
-        end
+                    for _, angleDeg in ipairs(verticalAngles) do
+                        local angleRad = math.rad(angleDeg)
+                        local verticalOffset = math.tan(angleRad) * dist
 
-        -- Path blocked, use multi-length whiskers to find best direction
-        local angleScores = {}
-        local angleClearances = {}
-        for i = 1, numRays do
-            angleScores[i] = 0
-            angleClearances[i] = 0
-        end
+                        local startX = px
+                        local startY = py
+                        local startZ = pz + 0.6  -- Start slightly above ground
+                        local endX = baseX
+                        local endY = baseY
+                        local endZ = pz + verticalOffset
 
-        for i = 1, numRays do
-            local angle = yaw - math.pi + (i - 1) * step
+                        local hit = tLine(startX, startY, startZ, endX, endY, endZ, 0x100111)
 
-            -- Test each angle at multiple lengths, up to a reasonable cap
-            for _, rayLen in ipairs(rayLengths) do
-                -- Don't penalize paths that hit walls past the actual destination
-                if rayLen <= math.max(dist2D + 1.0, 4.0) then
-                    local rx = px + math.cos(angle) * rayLen
-                    local ry = py + math.sin(angle) * rayLen
-                    local rz = pz + slopeZ * rayLen
-                    
-                    local hit = tLine(px, py, pz + Z_OFFSET, rx, ry, rz + Z_OFFSET, 0x100111)
+                        if drawDebug then
+                            libDrawRays[#libDrawRays + 1] = {
+                                px = startX, py = startY, pz = startZ,
+                                rx = endX, ry = endY, rz = endZ,
+                                hit = hit
+                            }
+                        end
 
-                    if drawDebug then
-                        libDrawRays[#libDrawRays + 1] = {px = px, py = py, pz = pz + Z_OFFSET, rx = rx, ry = ry, rz = rz + Z_OFFSET, hit = hit}
-                    end
-
-                    if not hit then
-                        angleClearances[i] = angleClearances[i] + rayLen
-                    else
-                        -- Penalize heavily if blocked at short range
-                        if rayLen == 1.5 or rayLen == 2.5 then
-                            angleScores[i] = angleScores[i] + 100
+                        -- Only consider it blocked if it's a significant obstacle (not ground)
+                        if hit and verticalOffset < -0.5 then
+                            -- This is a downward ray hitting something below step height
+                            -- Check if it's walkable ground or an obstacle
+                            local groundCheck = tLine(endX, endY, endZ + 0.5, endX, endY, endZ - 0.5, 0x100111)
+                            if groundCheck then
+                                anyRayBlocked = true
+                                break
+                            end
+                        elseif hit and verticalOffset >= -0.5 then
+                            -- This is hitting something at or above waist level - definitely blocked
+                            anyRayBlocked = true
+                            break
                         end
                     end
+
+                    if anyRayBlocked then break end
+                end
+
+                if not anyRayBlocked then
+                    bestClearance = math.max(bestClearance, dist)
+                else
+                    pathBlocked = true
+                    -- Calculate steering angle based on which side is blocked
+                    -- Test left and right sides independently
+                    local leftBlocked = false
+                    local rightBlocked = false
+
+                    -- Test left side
+                    local leftBaseX = px + fx * dist - rx * charRadius
+                    local leftBaseY = py + fy * dist - ry * charRadius
+                    for _, angleDeg in ipairs(verticalAngles) do
+                        local angleRad = math.rad(angleDeg)
+                        local verticalOffset = math.tan(angleRad) * dist
+                        local endZ = pz + verticalOffset
+                        local hit = tLine(px, py, pz + 0.6, leftBaseX, leftBaseY, endZ, 0x100111)
+                        if hit then
+                            leftBlocked = true
+                            break
+                        end
+                    end
+
+                    -- Test right side
+                    local rightBaseX = px + fx * dist + rx * charRadius
+                    local rightBaseY = py + fy * dist + ry * charRadius
+                    for _, angleDeg in ipairs(verticalAngles) do
+                        local angleRad = math.rad(angleDeg)
+                        local verticalOffset = math.tan(angleRad) * dist
+                        local endZ = pz + verticalOffset
+                        local hit = tLine(px, py, pz + 0.6, rightBaseX, rightBaseY, endZ, 0x100111)
+                        if hit then
+                            rightBlocked = true
+                            break
+                        end
+                    end
+
+                    if leftBlocked and not rightBlocked then
+                        bestSteerAngle = bestSteerAngle + 0.5  -- Steer right
+                    elseif rightBlocked and not leftBlocked then
+                        bestSteerAngle = bestSteerAngle - 0.5  -- Steer left
+                    elseif leftBlocked and rightBlocked then
+                        -- Both sides blocked, try wider angles
+                        local testAngles = {-0.8, -0.6, -0.4, -0.2, 0.2, 0.4, 0.6, 0.8}
+                        for _, testAngle in ipairs(testAngles) do
+                            local testFx = math.cos(yaw + testAngle)
+                            local testFy = math.sin(yaw + testAngle)
+                            local testX = px + testFx * dist
+                            local testY = py + testFy * dist
+                            local testClear = true
+                            for _, angleDeg in ipairs(verticalAngles) do
+                                local angleRad = math.rad(angleDeg)
+                                local verticalOffset = math.tan(angleRad) * dist
+                                local endZ = pz + verticalOffset
+                                local hit = tLine(px, py, pz + 0.6, testX, testY, endZ, 0x100111)
+                                if hit then
+                                    testClear = false
+                                    break
+                                end
+                            end
+                            if testClear then
+                                bestSteerAngle = testAngle
+                                break
+                            end
+                        end
+                    end
+                    break  -- Stop at first blocked distance
                 end
             end
-
-            -- Prefer angles with longer clearance
-            angleScores[i] = angleScores[i] - angleClearances[i]
-        end
-        
-        -- No need to hide lines manually, LibDraw Sync handles clearing
-
-        -- Find best angle considering goal direction and clearance
-        local bestAngle = nil
-        local minScore = 99999
-
-        for i = 1, numRays do
-            local angle = yaw - math.pi + (i - 1) * step
-            local diffToGoal = math.abs((angle - yaw + math.pi) % (math.pi * 2) - math.pi)
-
-            -- HEAVILY penalize turning away from the goal (e.g. running backwards down a hallway)
-            local score = angleScores[i] + (diffToGoal * 15.0)
-
-            -- Bonus for angles similar to last chosen direction (momentum)
-            if lastWhiskerAngle then
-                local diffToLast = math.abs((angle - lastWhiskerAngle + math.pi) % (math.pi * 2) - math.pi)
-                if diffToLast < 0.3 then
-                    score = score - 2.0
-                end
-            end
-
-            if score < minScore then
-                minScore = score
-                bestAngle = angle
-            end
         end
 
-        if bestAngle then
-            finalX = px + math.cos(bestAngle) * 5.0
-            finalY = py + math.sin(bestAngle) * 5.0
-            finalZ = pz
-            lastWhiskerAngle = bestAngle
-            lastWhiskerTime = now
-        else
-            -- Fallback to goal direction
-            lastWhiskerAngle = yaw
-            lastWhiskerTime = now
-        end
-
-        -- Track movement speed for momentum
-        if lastWhiskerAngle then
-            local speed = dist2D / (now - lastWhiskerTime + 0.1)
-            lastMovementSpeed = speed
+        if pathBlocked and bestSteerAngle ~= 0 then
+            -- Apply steering
+            local steerYaw = yaw + bestSteerAngle
+            local steerDist = math.min(dist2D, 5.0)
+            finalX = px + math.cos(steerYaw) * steerDist
+            finalY = py + math.sin(steerYaw) * steerDist
+            finalZ = pz + slopeZ * steerDist
         end
     end
 
@@ -444,22 +505,37 @@ local function EZMoverTick()
         end
     end
     
-    -- Smooth the path by skipping intermediate waypoints if we have direct line of sight
+    -- Safe Waypoint Skipping: We only skip waypoints if Line of Sight is clear AND the straight-line distance 
+    -- is nearly identical to the mesh path distance. This prevents us from skipping over holes or cliffs 
+    -- where LoS is clear but walking would be fatal.
     local tLine = TraceLine or (Nn and Nn.TraceLine)
     if tLine and ezPathIndex < #ezPath then
-        -- Check up to 5 waypoints ahead to skip jagged/unnecessary detours
         local maxScan = math.min(#ezPath, ezPathIndex + 5)
         for scanIdx = maxScan, ezPathIndex + 1, -1 do
             local scanWp = ezPath[scanIdx]
-            -- Check Line of Sight at waist level (+1.0)
-            local hit = tLine(px, py, pz + 1.0, scanWp.x, scanWp.y, scanWp.z + 1.0, 0x100111)
-            if not hit then
-                ezPathIndex = scanIdx
-                break
+            
+            -- Calculate straight line 3D distance
+            local straightDist = math.sqrt((scanWp.x - px)^2 + (scanWp.y - py)^2 + (scanWp.z - pz)^2)
+            
+            -- Calculate mesh path distance
+            local meshDist = math.sqrt((ezPath[ezPathIndex].x - px)^2 + (ezPath[ezPathIndex].y - py)^2 + (ezPath[ezPathIndex].z - pz)^2)
+            for i = ezPathIndex, scanIdx - 1 do
+                local p1 = ezPath[i]
+                local p2 = ezPath[i+1]
+                meshDist = meshDist + math.sqrt((p2.x - p1.x)^2 + (p2.y - p1.y)^2 + (p2.z - p1.z)^2)
+            end
+            
+            -- If straight distance is at least 85% of mesh distance, it's roughly a straight, flat path
+            if straightDist > 0 and meshDist > 0 and (straightDist / meshDist) >= 0.85 then
+                -- Double check Line of Sight to be absolutely sure no wall/tree is in the way
+                local hit = tLine(px, py, pz + 1.0, scanWp.x, scanWp.y, scanWp.z + 1.0, 0x100111)
+                if not hit then
+                    ezPathIndex = scanIdx
+                    break
+                end
             end
         end
     end
-
     local wp = ezPath[ezPathIndex]
     if not wp then 
         ezPath = nil 
@@ -492,8 +568,17 @@ local function EZMoverTick()
         end
         ezPathIndex = ezPathIndex + 1
         wp = ezPath[ezPathIndex]
-        
-        ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z)
+
+        -- Check if this is a quest interaction (turn-in/accept)
+        local isQuestInteraction = false
+        if GWB.QuestHandler and GWB.QuestHandler.CurrentAutopilotPin then
+            local pin = GWB.QuestHandler.CurrentAutopilotPin
+            if pin.type == "complete" or pin.type == "available" then
+                isQuestInteraction = true
+            end
+        end
+
+        ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z, isQuestInteraction)
     else
         -- Random chance to jump while running
         if math.random(1, 1000) > 990 then
@@ -502,13 +587,22 @@ local function EZMoverTick()
                 C_Timer.After(0.5, function() Unlock(AscendStop) end)
             end
         end
-        
+
         -- Disable whiskers if UnstuckHandler is performing maneuvers to prevent fighting
         local isUnstuck = GWB.State and GWB.State:getCurrentState() == "plugin.UnstuckHandler"
         if isUnstuck then
             GWB.EZMover:ClickToMoveSafeZ(wp.x, wp.y, wp.z)
         else
-            ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z)
+            -- Check if this is a quest interaction (turn-in/accept)
+            local isQuestInteraction = false
+            if GWB.QuestHandler and GWB.QuestHandler.CurrentAutopilotPin then
+                local pin = GWB.QuestHandler.CurrentAutopilotPin
+                if pin.type == "complete" or pin.type == "available" then
+                    isQuestInteraction = true
+                end
+            end
+
+            ClickToMoveWithWhiskers(px, py, pz, wp.x, wp.y, wp.z, isQuestInteraction)
         end
     end
 end

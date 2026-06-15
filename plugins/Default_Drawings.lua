@@ -5,7 +5,7 @@ local plugin = {}
 plugin.name = "Drawings"
 
 -- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "legion|tww" 
+plugin.xpacs = "classic|retail"
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "your_name"

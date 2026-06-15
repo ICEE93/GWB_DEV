@@ -1,6 +1,7 @@
 local Nn, GWB = ...
 local plugin = {
     name = "ZygorProvider",
+	xpacs = "classic|retail",
     author = "GWB",
     description = "Provides autopilot routing and objective targeting driven by Zygor Guides.",
     version = "1.0",
@@ -12,6 +13,23 @@ local ZygorProvider = {}
 local altCoordsIndex = 0
 local altCoordsList = {}
 local lastAltCoordsUpdate = 0
+
+-- Helper function to check if a quest is actually in the player's quest log
+local function IsQuestInLog(questId)
+    if not questId then return false end
+
+    local numEntries = GetNumQuestLogEntries and GetNumQuestLogEntries() or 0
+    for i = 1, numEntries do
+        local title, level, suggestedGroup, isHeader, isComplete = GetQuestLogTitle(i)
+        if title and not isHeader then
+            local questLogId = GetQuestLogQuestID and GetQuestLogQuestID(i)
+            if questLogId == questId then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 local function MapPosToWorldPos(mapID, x, y)
     local mapPos = CreateVector2D(x, y)
@@ -28,7 +46,7 @@ function ZygorProvider.GetNextWaypoint()
     end
 
     local wp = ZGV.Pointer.DestinationWaypoint
-    local debugZ = GWB.Settings and GWB.Settings.DebugZygor
+    local debugZ = false
 
     if wp and wp.x and wp.y and wp.m then
         if debugZ then GWB:Print("[Zygor Debug] Waypoint coords:", wp.m, wp.x, wp.y) end
@@ -117,7 +135,11 @@ function ZygorProvider.GetNextWaypoint()
                     if debugZ then GWB:Print("[Zygor Debug] Goal", i, "Action:", tostring(action), "NPCID:", tostring(goal.npcid), "TargetID:", tostring(goal.targetid)) end
 
                     if action == "talk" or action == "accept" or action == "turnin" or
-                       action == "buy" or action == "sell" or action == "interact" then
+                       action == "buy" or action == "sell" or action == "interact" or action == "fly" then
+                       
+                        if action == "fly" and ZGV.db and ZGV.db.profile then
+                            ZGV.db.profile.autotaxi = true
+                        end
 
                         p.type = "available"
                         local rawId = goal.npcid or goal.targetid
@@ -166,9 +188,9 @@ function ZygorProvider.IsObjective(obj)
     local currentStepNum = ZGV.CurrentStepNum or 1
     local steps = ZGV.CurrentGuide and ZGV.CurrentGuide.steps
     local maxLookahead = currentStepNum
-    
+
     if steps then
-        maxLookahead = math.min(currentStepNum + 20, #steps)
+        maxLookahead = currentStepNum -- Only check current step, not future steps
     else
         steps = { [currentStepNum] = ZGV.CurrentStep }
     end
@@ -221,10 +243,20 @@ function ZygorProvider.IsObjective(obj)
 
                     if match then
                         local action = goal.action
-                        if action == "kill" or action == "collect" or action == "interact" or 
-                           action == "talk" or action == "accept" or action == "turnin" or 
+                        if action == "kill" or action == "collect" or action == "interact" or
+                           action == "talk" or action == "accept" or action == "turnin" or
                            action == "buy" or action == "sell" or action == "click" then
-                            return true, (goal.target or goal.targetshort or "Zygor Target")
+                            -- Check if this goal has a quest ID and validate it's in the player's log
+                            local questId = goal.questId or goal.questid
+                            if questId then
+                                if not IsQuestInLog(questId) then
+                                    -- Quest is in Zygor's data but not actually in the player's log, skip it
+                                else
+                                    return true, (goal.target or goal.targetshort or "Zygor Target")
+                                end
+                            else
+                                return true, (goal.target or goal.targetshort or "Zygor Target")
+                            end
                         end
                     end
                 end

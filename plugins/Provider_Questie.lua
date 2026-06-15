@@ -2,13 +2,30 @@ local Nn, GWB = ...
 
 local plugin = {}
 plugin.name = "Provider_Questie"
-plugin.xpacs = "classic"
+plugin.xpacs = "classic|retail"
 plugin.author = "Antigravity"
 
 local QuestieProvider = {}
 
 local cachedPins = {}
 local lastCacheTime = 0
+
+-- Helper function to check if a quest is actually in the player's quest log
+local function IsQuestInLog(questId)
+    if not questId then return false end
+
+    local numEntries = GetNumQuestLogEntries and GetNumQuestLogEntries() or 0
+    for i = 1, numEntries do
+        local title, level, suggestedGroup, isHeader, isComplete = GetQuestLogTitle(i)
+        if title and not isHeader then
+            local questLogId = GetQuestLogQuestID and GetQuestLogQuestID(i)
+            if questLogId == questId then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 local function GetWorldCoordsFromMap(mapID, mapX, mapY)
     if not mapID or not mapX or not mapY then return nil, nil, nil end
@@ -132,89 +149,97 @@ function QuestieProvider.IsObjective(obj)
     for questId, quest in pairs(QuestiePlayer.currentQuestlog) do
         -- Check ALL incomplete quests, not just the current active pin
         if type(quest) == "table" and not quest.isComplete then
-            if type(quest.Objectives) == "table" then
-                for _, objective in pairs(quest.Objectives) do
-                    if type(objective) == "table" and not objective.Completed then
-                        -- direct monster/object match
-                        if (objective.Type == "monster" and typeId == 5 and objective.Id == objId) or
-                           (objective.Type == "object" and typeId == 8 and objective.Id == objId) then
-                            return true, quest.name or tostring(questId)
-                        end
-                        
-                        -- Check IdList for multiple valid IDs (common in multi-mob kill objectives)
-                        if type(objective.IdList) == "table" then
-                            for _, vId in pairs(objective.IdList) do
-                                if vId == objId then
-                                    return true, quest.name or tostring(questId)
-                                end
+            -- Double-check that this quest is actually in the player's quest log
+            if not IsQuestInLog(questId) then
+                -- Quest is in Questie's data but not actually in the player's log, skip it
+            else
+                if type(quest.Objectives) == "table" then
+                    for _, objective in pairs(quest.Objectives) do
+                        if type(objective) == "table" and not objective.Completed then
+                            -- direct monster/object match
+                            if (objective.Type == "monster" and typeId == 5 and objective.Id == objId) or
+                               (objective.Type == "object" and typeId == 8 and objective.Id == objId) then
+                                return true, quest.name or tostring(questId)
                             end
-                        end
-                        
-                        -- Check SpawnList (another Questie internal table for valid IDs)
-                        if type(objective.SpawnList) == "table" then
-                            for _, vId in pairs(objective.SpawnList) do
-                                if vId == objId then
-                                    return true, quest.name or tostring(questId)
-                                end
-                            end
-                        end
 
-                        -- item drop check via QuestieDB
-                        if objective.Type == "item" and typeId == 5 and QuestieDB then
-                            local dropMatched = false
-                            if QuestieDB.QueryItemSingle then
-                                local itemDrops = QuestieDB.QueryItemSingle(objective.Id, "npcDrops")
-                                if type(itemDrops) == "table" then
-                                    for dropNpcId, _ in pairs(itemDrops) do
-                                        if dropNpcId == objId then dropMatched = true; break end
-                                    end
-                                end
-                            elseif QuestieDB.QueryItem then
-                                local itemData = QuestieDB.QueryItem(objective.Id)
-                                if type(itemData) == "table" and type(itemData[3]) == "table" then
-                                    for dropNpcId, _ in pairs(itemData[3]) do
-                                        if dropNpcId == objId then dropMatched = true; break end
+                            -- Check IdList for multiple valid IDs (common in multi-mob kill objectives)
+                            if type(objective.IdList) == "table" then
+                                for _, vId in pairs(objective.IdList) do
+                                    if vId == objId then
+                                        return true, quest.name or tostring(questId)
                                     end
                                 end
                             end
-                            if dropMatched then return true, quest.name or tostring(questId) end
-                        end
-                        
-                        -- QuestieTooltips Direct NPC-to-Quest ID Match (The most reliable method)
-                        if typeId == 5 and QuestieLoader then
-                            local ok, QuestieTooltips = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieTooltips")
-                            if ok and QuestieTooltips and type(QuestieTooltips.tooltipLookup) == "table" then
-                                local tData = QuestieTooltips.tooltipLookup["m_" .. tostring(objId)]
-                                if type(tData) == "table" then
-                                    for qIdKey, _ in pairs(tData) do
-                                        local qIdNum = tonumber(qIdKey)
-                                        if qIdNum and QuestiePlayer.currentQuestlog[qIdNum] and not QuestiePlayer.currentQuestlog[qIdNum].isComplete then
-                                            return true, QuestiePlayer.currentQuestlog[qIdNum].name or tostring(qIdNum)
+
+                            -- Check SpawnList (another Questie internal table for valid IDs)
+                            if type(objective.SpawnList) == "table" then
+                                for _, vId in pairs(objective.SpawnList) do
+                                    if vId == objId then
+                                        return true, quest.name or tostring(questId)
+                                    end
+                                end
+                            end
+
+                            -- item drop check via QuestieDB
+                            if objective.Type == "item" and typeId == 5 and QuestieDB then
+                                local dropMatched = false
+                                if QuestieDB.QueryItemSingle then
+                                    local itemDrops = QuestieDB.QueryItemSingle(objective.Id, "npcDrops")
+                                    if type(itemDrops) == "table" then
+                                        for dropNpcId, _ in pairs(itemDrops) do
+                                            if dropNpcId == objId then dropMatched = true; break end
+                                        end
+                                    end
+                                elseif QuestieDB.QueryItem then
+                                    local itemData = QuestieDB.QueryItem(objective.Id)
+                                    if type(itemData) == "table" and type(itemData[3]) == "table" then
+                                        for dropNpcId, _ in pairs(itemData[3]) do
+                                            if dropNpcId == objId then dropMatched = true; break end
+                                        end
+                                    end
+                                end
+                                if dropMatched then return true, quest.name or tostring(questId) end
+                            end
+
+                            -- QuestieTooltips Direct NPC-to-Quest ID Match (The most reliable method)
+                            if typeId == 5 and QuestieLoader then
+                                local ok, QuestieTooltips = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieTooltips")
+                                if ok and QuestieTooltips and type(QuestieTooltips.tooltipLookup) == "table" then
+                                    local tData = QuestieTooltips.tooltipLookup["m_" .. tostring(objId)]
+                                    if type(tData) == "table" then
+                                        for qIdKey, _ in pairs(tData) do
+                                            local qIdNum = tonumber(qIdKey)
+                                            if qIdNum and QuestiePlayer.currentQuestlog[qIdNum] and not QuestiePlayer.currentQuestlog[qIdNum].isComplete then
+                                                -- Double-check with quest log
+                                                if IsQuestInLog(qIdNum) then
+                                                    return true, QuestiePlayer.currentQuestlog[qIdNum].name or tostring(qIdNum)
+                                                end
+                                            end
                                         end
                                     end
                                 end
                             end
-                        end
 
-                        -- Fallback string matching for GameObjects and NPCs with missing IDs
-                        if (typeId == 5 or typeId == 8 or typeId == 3) then
-                            local objName = ObjectName(obj)
-                            if objName then
-                                local lowerName = string.lower(objName)
-                                
-                                if quest.name and lowerName == string.lower(quest.name) then
-                                    return true, quest.name
-                                end
-                                
-                                if objective.Description then
-                                    local lowerDesc = string.lower(objective.Description)
-                                    if string.find(lowerDesc, lowerName, 1, true) then
-                                        return true, quest.name or tostring(questId)
+                            -- Fallback string matching for GameObjects and NPCs with missing IDs
+                            if (typeId == 5 or typeId == 8 or typeId == 3) then
+                                local objName = ObjectName(obj)
+                                if objName then
+                                    local lowerName = string.lower(objName)
+
+                                    if quest.name and lowerName == string.lower(quest.name) then
+                                        return true, quest.name
                                     end
-                                    
-                                    -- Reverse string find: sometimes the mob name contains the description (e.g. "Diseased Boar" contains "Boar")
-                                    if string.find(lowerName, lowerDesc, 1, true) then
-                                        return true, quest.name or tostring(questId)
+
+                                    if objective.Description then
+                                        local lowerDesc = string.lower(objective.Description)
+                                        if string.find(lowerDesc, lowerName, 1, true) then
+                                            return true, quest.name or tostring(questId)
+                                        end
+
+                                        -- Reverse string find: sometimes the mob name contains the description (e.g. "Diseased Boar" contains "Boar")
+                                        if string.find(lowerName, lowerDesc, 1, true) then
+                                            return true, quest.name or tostring(questId)
+                                        end
                                     end
                                 end
                             end

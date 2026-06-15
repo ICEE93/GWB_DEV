@@ -77,8 +77,10 @@ local function _update()
 
 
     -- combat
-    combatHandler.settings.cb_range_min.value = 20 -- Warlocks cast from afar
-    combatHandler.settings.cb_range_max.value = 30
+    if combatHandler and combatHandler.settings then
+        combatHandler.settings.cb_range_min.value = 20 -- Warlocks cast from afar
+        combatHandler.settings.cb_range_max.value = 30
+    end
 
     -- #==============================#
     -- #         Rest Handler         #

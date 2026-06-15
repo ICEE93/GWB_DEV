@@ -243,6 +243,8 @@ end
 
 -- all the logic when scanning nearbys?
 function GWB:OnBotScanTick(losCheck)
+    if UnitIsDeadOrGhost("player") then return false end
+
     if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
         return false -- We already have a valid target! Don't scan!
     end

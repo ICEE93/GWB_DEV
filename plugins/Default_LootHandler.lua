@@ -152,23 +152,39 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     if previousCtx then return true end
     previousCtx = ctx
 
+    -- Check if player is channeling or casting (e.g., bandage), delay looting if so
+    local isCasting = UnitCastingInfo("player") ~= nil
+    local isChanneling = UnitChannelInfo("player") ~= nil
+
+    if isCasting or isChanneling then
+        GWB:Print("OnPlayerLeaveCombat LootHandler: Player is casting/channeling, delaying looting")
+        -- Wait for cast/channel to finish before starting looting
+        C_Timer.After(0.5, function()
+            if not UnitAffectingCombat("player") then
+                -- Re-trigger the looting logic after cast/channel finishes
+                plugin.callbacks.OnPlayerLeaveCombat(ctx)
+            end
+        end)
+        return true
+    end
+
     GWB:Print("OnPlayerLeaveCombat LootHandler")
-    
+
     -- Immediately stop the player so they don't keep running away while we generate a path
     if GWB.Settings.UseEZNavSafe and GWB.EZMover then
         if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
     elseif GWB.Mover then
         if GWB.Mover:IsMoving() then GWB.Mover:Stop() end
     end
-    
+
     local px, py, pz = ObjectPosition("player")
     if px then ClickToMove(px, py, pz) end
-    
+
     postCombatStarted = GetTime()
     GWB:TickerSetState(tickerNamePostCombat, true)
     GWB.isPostCombatLooting = true
     GWB.State:callState("plugin.LootHandler")
-    
+
     return true -- block others until done
 end
 
@@ -179,6 +195,7 @@ plugin.callbacks.OnLootFinished = function(ctx)
         if ptr then lootedCorpses[ptr] = GetTime() + 2.5 end
     end
     lastLootingCorpse = nil
+    postCombatStarted = GetTime() -- Reset timer so we pause 1.5s before moving on
     return false
 end
 

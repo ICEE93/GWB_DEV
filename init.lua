@@ -65,16 +65,74 @@ GWB:Require(filePath .. "ui/recorder.lua")
 -- Classic Data
 GWB:Require(filePath .. "database/classic/data.lua")
 
+-- Helper function to get current game expansion
+local function GetCurrentExpansion()
+    local buildVersion, buildNumber, buildDate, interfaceVersion, localizedVersion, buildInfo, currentVersion = GetBuildInfo()
+    if not interfaceVersion then return "unknown" end
+
+    -- Retail interface versions are typically 100000+ (e.g., 100200 for Dragonflight, 115000 for The War Within)
+    -- Classic interface versions are typically 10000-12000 range
+    -- TBC Classic: 20000-21000
+    -- WotLK Classic: 30000-31000
+    -- Cata Classic: 40000-41000
+
+    if interfaceVersion >= 100000 then
+        return "retail"
+    elseif interfaceVersion >= 40000 then
+        return "cata"
+    elseif interfaceVersion >= 30000 then
+        return "wotlk"
+    elseif interfaceVersion >= 20000 then
+        return "tbc"
+    elseif interfaceVersion >= 10000 then
+        return "classic"
+    else
+        return "unknown"
+    end
+end
+
+local currentExpansion = GetCurrentExpansion()
+
+-- Helper function to check if plugin should load for current expansion
+local function ShouldLoadPlugin(pluginXpacs)
+    if not pluginXpacs or pluginXpacs == "" then
+        return true -- Load if no xpacs specified (works on all versions)
+    end
+
+    -- Parse the xpacs string (e.g., "classic|tbc|wotlk|cata")
+    for xpac in string.gmatch(pluginXpacs, "[^|]+") do
+        if xpac == currentExpansion then
+            return true
+        end
+    end
+
+    -- Plugin has xpacs specified but doesn't match current expansion
+    return false
+end
+
 -- load all plugins
 local plugins = Nn.ListFiles(filePath .. "plugins/*")
 for i=1, #plugins do
     local plugin = plugins[i]
     if plugin ~= "." and plugin ~= ".." and string.match(plugin, "%.lua$") then
-        GWB:Print("Loading plugin", plugin)
         local path = filePath .. "plugins/" .. plugin
-        local data, err = pcall(GWB.Require, GWB, path)
-        if not data then
-            GWB:Print("Failed loading", plugin, "with err:", err)
+
+        -- Load plugin to check xpacs field
+        local pluginSrc = Nn.ReadFile(path)
+        if pluginSrc then
+            -- Extract plugin.xpacs from source
+            local xpacsMatch = pluginSrc:match('plugin%.xpacs%s*=%s*["\']([^"\']+)["\']')
+            if xpacsMatch and not ShouldLoadPlugin(xpacsMatch) then
+                GWB:Print("Skipping plugin", plugin, "(xpacs:", xpacsMatch, "does not match current expansion:", currentExpansion .. ")")
+            else
+                GWB:Print("Loading plugin", plugin)
+                local data, err = pcall(GWB.Require, GWB, path)
+                if not data then
+                    GWB:Print("Failed loading", plugin, "with err:", err)
+                end
+            end
+        else
+            GWB:Print("Failed to read plugin file", plugin)
         end
     end
 end

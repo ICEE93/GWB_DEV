@@ -4,8 +4,8 @@ local Nn, GWB = ...
 local plugin = {}
 plugin.name = "CombatHandler"
 
--- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "era|tbc|cata|wotlk|mop|wod|legion|tww" 
+-- Works on all versions
+plugin.xpacs = "" 
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "Unknown"
@@ -145,7 +145,10 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     combatStarted = GetTime()
     postCombatStarted = 0
     GWB:TickerSetState(tickerNameCombat, true)
-    GWB:TickerSetState(tickerNameCombat, true)
+    
+    -- Actually push the state so Waypoints yields to us!
+    GWB.State:callState("plugin.CombatHandler")
+    
     return true -- block others
 end
 
@@ -201,53 +204,104 @@ local function updateFacingTarget()
     end
 end
 
--- hacky one!!!
 local function autoTarget()
-    if not Objects or not GetFocus then print("fail") return end -- Unlocker API's
+    if not Objects or not GetFocus then return end
     local os = Objects()
     local old = GetFocus()
-    
-    local isAutopilot = GWB.Settings.QuestieAutopilot
+    local isAutopilot = GWB.Settings.QuestieAutopilot or (GWB.Settings and GWB.Settings.AutopilotProvider)
     local function isQuestObjFast(o) return GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o) end
+
+    local bestTarget = nil
+    local bestScore = -999999
+    local inCombat = UnitAffectingCombat("player")
+    local isMountedAndMoving = IsMounted and IsMounted() and GetUnitSpeed("player") > 0
+    local px, py, pz = ObjectPosition("player")
 
     for i=1, #os do
         local o = os[i]
         if ObjectType(o) == 5 then
-            local skipTarget = false
-            if isAutopilot then
-                local isQuest, _ = isQuestObjFast(o)
-                if not isQuest then
-                    skipTarget = true
-                end
-            end
-            
-            -- Defensive combat override: If the mob is attacking us, we fight back!
-            -- But NOT if we are mounted and moving (just run away)
-            local isMountedAndMoving = IsMounted and IsMounted() and GetUnitSpeed("player") > 0
-            if skipTarget and not isMountedAndMoving then
-                if UnitTarget and UnitTarget(o) == Object("player") then
-                    skipTarget = false -- override and fight back!
-                end
-            end
-            
-            if not skipTarget then
-                SetFocus(o)
-                if 
-                    not UnitIsDead("focus") and 
-                    UnitIsEnemy("player", "focus") and 
-                    UnitCanAttack("player", "focus") and 
-                    UnitExists("focus") and 
-                    CheckInteractDistance("focus", 1)  
-                then
-                    Unlock(TargetUnit, "focus")
-                    SetFocus(old)
-                    updateFacingTarget()
-                    return
+            SetFocus(o)
+            if not UnitIsDead("focus") and UnitIsEnemy("player", "focus") and UnitCanAttack("player", "focus") then
+                local isAttackingMe = UnitTarget and UnitTarget(o) == Object("player")
+
+                -- Skip if it's tapped by someone else and not attacking us
+                local isTapped = UnitIsTapDenied and UnitIsTapDenied("focus")
+
+                -- If we are mounted and moving, ignore everything unless it dismounts us
+                if not (isMountedAndMoving and not isAttackingMe) then
+                    local isQuest = false
+                    if isAutopilot then
+                        isQuest = isQuestObjFast(o)
+                    else
+                        isQuest = true
+                    end
+
+                    local distToMe = 999
+                    local px, py, pz = ObjectPosition("player")
+                    local ox, oy, oz = ObjectPosition(o)
+                    if px and ox then
+                        distToMe = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+                    end
+
+                    -- For quest mobs, engage at longer range (up to 30 yards)
+                    -- For non-quest mobs, require melee range
+                    local inRange = (isQuest and distToMe <= 30) or CheckInteractDistance("focus", 1)
+
+                    if inRange and (isAttackingMe or (not isTapped and isQuest) or (inCombat and UnitAffectingCombat("focus"))) then
+                        local score = 0
+
+                        if isAttackingMe then
+                            score = 10000 - distToMe -- Prioritize closest attackers
+                        elseif inCombat then
+                            if UnitAffectingCombat("focus") then
+                                score = 5000 - distToMe -- Likely the mob we are in combat with
+                            else
+                                score = -999999 -- Do NOT chain pull passive mobs!
+                            end
+                        else
+                            -- Check for groups
+                            local friendsNearby = 0
+                            if ox then
+                                for j=1, #os do
+                                    local friend = os[j]
+                                    if friend ~= o and ObjectType(friend) == 5 then
+                                        local fx, fy, fz = ObjectPosition(friend)
+                                        if fx then
+                                            local fDist = math.sqrt((ox-fx)^2 + (oy-fy)^2 + (oz-fz)^2)
+                                            if fDist < 18.0 then
+                                                SetFocus(friend)
+                                                if UnitCanAttack("player", "focus") and not UnitIsDead("focus") then
+                                                    friendsNearby = friendsNearby + 1
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                                SetFocus(o) -- restore outer loop focus
+                            end
+
+                            if friendsNearby > 0 then
+                                score = -50000 -- Do not pull groups!
+                            else
+                                score = 1000 - distToMe
+                            end
+                        end
+
+                        if score > bestScore then
+                            bestScore = score
+                            bestTarget = o
+                        end
+                    end
                 end
             end
         end
-
     end
+
+    if bestTarget and bestScore > -10000 then
+        SetFocus(bestTarget)
+        Unlock(TargetUnit, "focus")
+    end
+
     SetFocus(old)
 end
 
@@ -337,18 +391,46 @@ plugin.handlers.tickCombat = function()
     end
 end
 
+local exitCombatDelay = 0
+
 plugin.handlers.stateTick = function()
-    --print("tick CombatHandler!")
-    if UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") then
+    local hasValidTarget = UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target")
+    
+    if not hasValidTarget then
+        -- Clear dead target
+        if UnitIsDead("target") and Unlock and RunMacroText then
+            Unlock(RunMacroText, "/cleartarget")
+        end
+
+        if not UnitAffectingCombat("player") then
+            if exitCombatDelay == 0 then
+                exitCombatDelay = GetTime() + 1.5
+                -- Stop moving
+                if GWB.Settings.UseEZNavSafe then
+                    if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
+                elseif GWB.Mover:IsMoving() then
+                    GWB.Mover:Stop()
+                end
+                local px, py, pz = ObjectPosition("player")
+                if px then ClickToMove(px, py, pz) end
+            elseif GetTime() > exitCombatDelay then
+                exitCombatDelay = 0
+                return true
+            end
+        else
+            -- We are in combat but have no target. Wait for autoTarget() to pick one.
+            exitCombatDelay = 0
+        end
+        return false
+    else
+        exitCombatDelay = 0
         local tick = GetTime()
         if tick > updateLastFacing + 0.5 then
             updateLastFacing = tick
             updateFacingTarget()
             tickMovement()
         end
-    else
-        -- if the target died, we return?
-        return true
+        return false
     end
 end
 

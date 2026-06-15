@@ -35,7 +35,7 @@ local function IsPlayerWarlock()
 end
 
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
-    if not IsPlayerWarlock() then return false end
+    if GWB.Settings.DisableCR or not IsPlayerWarlock() then return false end
     
     GWB:Debug("Warlock Combat CR enabled!")
     GWB:TickerSetState(tickerNameCombat, true)
@@ -43,7 +43,7 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     return false -- do not consume
 end
 plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
-    if not IsPlayerWarlock() then return false end
+    if GWB.Settings.DisableCR or not IsPlayerWarlock() then return false end
     
     GWB:Debug("Warlock Rested CR enabled!")
     GWB:TickerSetState(tickerNameCombat, false)

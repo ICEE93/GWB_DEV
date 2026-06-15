@@ -181,6 +181,7 @@ local engageLastDist = 99999
 
 -- Check for nearby mobs, no need to path to waypoints after 
 local function DoActiveEngage()
+    if UnitIsDeadOrGhost("player") then return false end
     if GWB.isPostCombatLooting then return false end
     if GWB:OnBotScanTick() then
         if engageTarget ~= GWB.targetUnit then
@@ -352,7 +353,7 @@ function _tickTest()
                 end
             end
             
-            if GWB.Settings.DebugZygor then
+            if false then
                 if foundTarget then
                     GWB:Print("[Zygor Debug] Waypoint Engine found target ID", pin.id, "in Object Manager.")
                 else
@@ -414,9 +415,11 @@ function _tickTest()
 
         -- If not interacting, move towards the pin coordinate
         local distToPin2D = Distance(px, py, 0, pin.wx, pin.wy, 0)
+        local isQuestInteraction = (pin.type == "complete" or pin.type == "available" or pin.type == "turnin" or pin.type == "accept" or pin.type == "turn in")
+        
         if distToPin2D > 5 then
             if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                GWB.EZMover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
+                GWB.EZMover:MoveToXYZ(pin.wx, pin.wy, pin.wz, isQuestInteraction)
             else
                 GWB.Mover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
             end

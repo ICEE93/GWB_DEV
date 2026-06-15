@@ -104,3 +104,15 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **Recorder:** Fixed NPC interaction recording so it properly records the NPC ID using Object(" npc\) and added error handling to the OnGossipStart event to prevent silent failures.
 - **Quests:** Created Medium_QuestHandler.lua to dynamically scan nearby objects/NPCs (within a 40 yard radius) and cross-reference them with active WoW Classic quest objectives.
 - **Movement/Waypoints:** Fixed the issue where Waypoints would aggressively fight against Combat and Looting by cleanly yielding movement control when engaged with an enemy, looting, or pursuing a quest target.
+## [2026-06-15]
+- **LootHandler:** Added a 1.5-second pause after looting to prevent the bot from instantly snapping to the next coordinate.
+- **CombatHandler:** Added a 1.5-second pause upon exiting combat, and completely refactored autoTarget to prevent chain pulling and group pulling by checking 18-yard proximity around targets.
+- **CombatHandler:** Fixed a bug where Waypoints wouldn't yield during combat by explicitly pushing the CombatHandler state to the state machine.
+- **Waypoints/Map:** Disabled scanning for quest objectives and active engagements while the player is dead or a ghost.
+- **GhostWalk:** Implemented smart resurrection logic that scans for hostiles and resurrects at maximum safe distance (up to 38 yards) instead of walking blindly to the corpse.
+- **Navigation:** Doubled 360-degree whiskers from 32 to 64 rays for higher resolution obstacle avoidance.
+- **Navigation/Waypoints:** Implemented extreme aggro-avoidance routing when walking to quest turn-ins or accepts.
+- **QuestHandler:** Fixed a nil value error in blacklisting by replacing ObjectGUID with ObjectPointer.
+- **Settings:** Made DisableCR persistent across reloads.
+- **RestHandler:** Enabled eating food/drink from bags and added First Aid bandaging support.
+

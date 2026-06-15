@@ -4,8 +4,8 @@ local Nn, GWB = ...
 local plugin = {}
 plugin.name = "TrainerHandler"
 
--- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "classic" 
+-- Works on all versions
+plugin.xpacs = "" 
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "Unknown"

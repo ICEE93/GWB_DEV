@@ -4,8 +4,8 @@ local Nn, GWB = ...
 local plugin = {}
 plugin.name = "RestHandler"
 
--- TODO: add these for API or whatever? maybe just use Interface/build nrs?
-plugin.xpacs = "classic" 
+-- Works on all versions
+plugin.xpacs = "" 
 
 -- this is handy for when a users wants to select from a GUI soonTM?
 plugin.author = "Unknown"
@@ -39,17 +39,21 @@ plugin.settings = {
     -- TODO!!!
     ["rest_use_food_normal"] = {
         ["label"] = "Consume food while resting",
-        ["value"] = false,
+        ["value"] = true,
     },
     ["rest_use_drink"] = {
         ["label"] = "Consume drink while resting",
-        ["value"] = false,
+        ["value"] = true,
+    },
+    ["rest_use_bandage"] = {
+        ["label"] = "Use bandage while resting",
+        ["value"] = true,
     },
     -- Track item collection, and ONLY use items collected (purchased)
     -- while botting, to prevent harming inventory?
     ["rest_consume_collected_only"] = {
         ["label"] = "Consume ONLY items collected from botting",
-        ["value"] = true 
+        ["value"] = false 
     }
 }
 
@@ -104,6 +108,48 @@ local function ConsumeBestDrinkIfPossible()
     local cmd = format("CLICK %s:LeftButton", "GWB_DrinkBtn")
     Unlock(RunBinding, cmd)
     Unlock(RunBinding, cmd, "up")
+end
+
+local RECENTLY_BANDAGED_SPELL_ID = 11196
+local function FindUsableBandage()
+    local BANDAGE_IDS = { 14530, 2581, 1251, 6451, 6450, 3531, 3530, 8545, 8544 } -- Standard classic bandages
+    for bag = 0, 4 do
+        local numSlots = (C_Container and C_Container.GetContainerNumSlots) and C_Container.GetContainerNumSlots(bag) or GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local itemId = (C_Container and C_Container.GetContainerItemID) and C_Container.GetContainerItemID(bag, slot) or GetContainerItemID(bag, slot)
+            if itemId then
+                for _, bId in ipairs(BANDAGE_IDS) do
+                    if itemId == bId then
+                        local getCooldown = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
+                        local start, duration = getCooldown(itemId)
+                        if start == 0 or (start + duration - GetTime() <= 0) then
+                            return itemId, bag, slot
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function ConsumeBestBandageIfPossible()
+    if HasAuraByID(RECENTLY_BANDAGED_SPELL_ID) then return false end
+    local bandageId, bag, slot = FindUsableBandage()
+    if not bandageId then return false end
+    
+    if not _G.GWB_BandageBtn then
+        _G.GWB_BandageBtn = CreateFrame("Button", "GWB_BandageBtn", nil, "SecureActionButtonTemplate")
+        _G.GWB_BandageBtn:SetAttribute("type", "macro")
+    end
+    
+    local itemName = GetItemInfo(bandageId) or "Bandage"
+    _G.GWB_BandageBtn:SetAttribute("macrotext", "/target player\n/use " .. itemName)
+    
+    local cmd = format("CLICK %s:LeftButton", "GWB_BandageBtn")
+    Unlock(RunBinding, cmd)
+    Unlock(RunBinding, cmd, "up")
+    return true
 end
 
 local EATING_SPELL_ID   = 433 -- "Food"
@@ -212,8 +258,17 @@ plugin.handlers.stateTick = function()
         end
 
         if hpp < min_hp and not IsPlayerEating() then
-            --GWB:Debug("start consume foooood??")
-            if use_food then
+            local channelName = UnitChannelInfo("player")
+            if channelName == "First Aid" then return false end -- Currently channeling bandage, don't interrupt
+            
+            local use_bandage = plugin.settings.rest_use_bandage and plugin.settings.rest_use_bandage.value
+            local bandaged = false
+            
+            if use_bandage and not HasAuraByID(RECENTLY_BANDAGED_SPELL_ID) then
+                bandaged = ConsumeBestBandageIfPossible()
+            end
+            
+            if not bandaged and use_food then
                 ConsumeBestFoodIfPossible()
             end
         end
