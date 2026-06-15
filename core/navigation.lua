@@ -77,6 +77,16 @@ function GWB.EZMover:MoveToXYZ(x, y, z)
     end
 
     local targetX, targetY, targetZ = jx, jy, z
+    
+    local dx, dy = targetX - px, targetY - py
+    local totalDist2D = math.sqrt(dx*dx + dy*dy)
+    if totalDist2D > 180.0 then
+        -- Break long paths into chunks to prevent pathfinder timeouts/failures
+        local ratio = 180.0 / totalDist2D
+        targetX = px + dx * ratio
+        targetY = py + dy * ratio
+        targetZ = pz + (z - pz) * ratio
+    end
 
     isGenerating = true
     Nn.EZ.Nav.GeneratePath(px, py, pz, targetX, targetY, targetZ, function(path)
@@ -302,160 +312,105 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
             end
         end
 
-        -- Forward Whisker Array with Arc Pattern
-        -- Cast rays in a fan shape from up to down to detect obstacles at different heights
+        -- Forward Whisker Array with Fan Pattern
         local charRadius = 0.5  -- WoW character collision radius in yards
         local stepHeight = 0.5   -- Maximum step height in yards
+        local testDist = math.min(dist2D, 10.0) -- Look ahead up to 10 yards
+        
+        -- Vertical angles for arc pattern (from up to down)
+        local verticalAngles = {30, 15, 0, -15, -30, -45, -60}
 
-        -- Calculate Forward (F) and Right (R) directional vectors
-        local fx = math.cos(yaw)
-        local fy = math.sin(yaw)
-        local rx = math.sin(yaw)
-        local ry = -math.cos(yaw)
-
-        -- Vertical angles for arc pattern (from up to down in degrees, converted to radians)
-        local verticalAngles = {30, 15, 0, -15, -30, -45, -60}  -- Up to down
-        local testDistances = {2.0, 4.0, 6.0, 10.0}
-        local drawDebug = GWB.Settings and GWB.Settings.DebugWhiskers
-        if drawDebug then
-            InitLibDraw()
-            wipe(libDrawRays)
-        end
+        -- Steering angles to test (0 = straight, then progressively wider)
+        local steerAngles = {0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0, 1.25, -1.25, 1.5, -1.5}
+        
+        -- Distance brackets to check (proactive early avoidance)
+        local distanceBrackets = { 
+            math.min(dist2D, 12.0), 
+            math.min(dist2D, 8.0), 
+            math.min(dist2D, 4.0), 
+            math.min(dist2D, 2.0) 
+        }
 
         local pathBlocked = false
         local bestSteerAngle = 0
-        local bestClearance = 0
+        local bestSteerDist = 5.0
+        local clearPathFound = false
 
-        for _, dist in ipairs(testDistances) do
-            if dist <= dist2D + 1.0 then
-                local anyRayBlocked = false
+        for _, testDist in ipairs(distanceBrackets) do
+            if testDist > 1.0 then
+                for _, steer in ipairs(steerAngles) do
+                    local testYaw = yaw + steer
+                    local fx = math.cos(testYaw)
+                    local fy = math.sin(testYaw)
+                    local rx = math.sin(testYaw)
+                    local ry = -math.cos(testYaw)
 
-                -- Cast rays in arc pattern for center, left, and right positions
-                local positions = {
-                    {offset = 0, name = "center"},
-                    {offset = -charRadius, name = "left"},
-                    {offset = charRadius, name = "right"}
-                }
+                    local anyRayBlocked = false
 
-                for _, pos in ipairs(positions) do
-                    local baseX = px + fx * dist - rx * pos.offset
-                    local baseY = py + fy * dist - ry * pos.offset
+                    -- Test 5 positions across the body width
+                    local positions = {
+                        {offset = 0},
+                        {offset = -charRadius * 0.5},
+                        {offset = charRadius * 0.5},
+                        {offset = -charRadius},
+                        {offset = charRadius}
+                    }
 
-                    for _, angleDeg in ipairs(verticalAngles) do
-                        local angleRad = math.rad(angleDeg)
-                        local verticalOffset = math.tan(angleRad) * dist
+                    for _, pos in ipairs(positions) do
+                        local baseX = px + fx * testDist - rx * pos.offset
+                        local baseY = py + fy * testDist - ry * pos.offset
 
-                        local startX = px
-                        local startY = py
-                        local startZ = pz + 0.6  -- Start slightly above ground
-                        local endX = baseX
-                        local endY = baseY
-                        local endZ = pz + verticalOffset
+                        for _, angleDeg in ipairs(verticalAngles) do
+                            local angleRad = math.rad(angleDeg)
+                            local verticalOffset = math.tan(angleRad) * testDist
 
-                        local hit = tLine(startX, startY, startZ, endX, endY, endZ, 0x100111)
+                            local endZ = pz + verticalOffset
+                            local hit = tLine(px, py, pz + 0.6, baseX, baseY, endZ, 0x100111)
 
-                        if drawDebug then
-                            libDrawRays[#libDrawRays + 1] = {
-                                px = startX, py = startY, pz = startZ,
-                                rx = endX, ry = endY, rz = endZ,
-                                hit = hit
-                            }
-                        end
-
-                        -- Only consider it blocked if it's a significant obstacle (not ground)
-                        if hit and verticalOffset < -0.5 then
-                            -- This is a downward ray hitting something below step height
-                            -- Check if it's walkable ground or an obstacle
-                            local groundCheck = tLine(endX, endY, endZ + 0.5, endX, endY, endZ - 0.5, 0x100111)
-                            if groundCheck then
+                            if hit and verticalOffset < -0.5 then
+                                -- Downward ray hit below step height, check if walkable ground
+                                local groundCheck = tLine(baseX, baseY, endZ + 0.5, baseX, baseY, endZ - 0.5, 0x100111)
+                                if groundCheck then
+                                    anyRayBlocked = true
+                                    break
+                                end
+                            elseif hit and verticalOffset >= -0.5 then
+                                -- Hit something waist/head level
                                 anyRayBlocked = true
                                 break
                             end
-                        elseif hit and verticalOffset >= -0.5 then
-                            -- This is hitting something at or above waist level - definitely blocked
-                            anyRayBlocked = true
-                            break
                         end
+
+                        if anyRayBlocked then break end
                     end
 
-                    if anyRayBlocked then break end
+                    if not anyRayBlocked then
+                        bestSteerAngle = steer
+                        if steer ~= 0 then
+                            pathBlocked = true -- We had to steer
+                        end
+                        bestSteerDist = testDist
+                        clearPathFound = true
+                        break -- Found the tightest clear angle at this distance!
+                    end
                 end
-
-                if not anyRayBlocked then
-                    bestClearance = math.max(bestClearance, dist)
-                else
-                    pathBlocked = true
-                    -- Calculate steering angle based on which side is blocked
-                    -- Test left and right sides independently
-                    local leftBlocked = false
-                    local rightBlocked = false
-
-                    -- Test left side
-                    local leftBaseX = px + fx * dist - rx * charRadius
-                    local leftBaseY = py + fy * dist - ry * charRadius
-                    for _, angleDeg in ipairs(verticalAngles) do
-                        local angleRad = math.rad(angleDeg)
-                        local verticalOffset = math.tan(angleRad) * dist
-                        local endZ = pz + verticalOffset
-                        local hit = tLine(px, py, pz + 0.6, leftBaseX, leftBaseY, endZ, 0x100111)
-                        if hit then
-                            leftBlocked = true
-                            break
-                        end
-                    end
-
-                    -- Test right side
-                    local rightBaseX = px + fx * dist + rx * charRadius
-                    local rightBaseY = py + fy * dist + ry * charRadius
-                    for _, angleDeg in ipairs(verticalAngles) do
-                        local angleRad = math.rad(angleDeg)
-                        local verticalOffset = math.tan(angleRad) * dist
-                        local endZ = pz + verticalOffset
-                        local hit = tLine(px, py, pz + 0.6, rightBaseX, rightBaseY, endZ, 0x100111)
-                        if hit then
-                            rightBlocked = true
-                            break
-                        end
-                    end
-
-                    if leftBlocked and not rightBlocked then
-                        bestSteerAngle = bestSteerAngle + 0.5  -- Steer right
-                    elseif rightBlocked and not leftBlocked then
-                        bestSteerAngle = bestSteerAngle - 0.5  -- Steer left
-                    elseif leftBlocked and rightBlocked then
-                        -- Both sides blocked, try wider angles
-                        local testAngles = {-0.8, -0.6, -0.4, -0.2, 0.2, 0.4, 0.6, 0.8}
-                        for _, testAngle in ipairs(testAngles) do
-                            local testFx = math.cos(yaw + testAngle)
-                            local testFy = math.sin(yaw + testAngle)
-                            local testX = px + testFx * dist
-                            local testY = py + testFy * dist
-                            local testClear = true
-                            for _, angleDeg in ipairs(verticalAngles) do
-                                local angleRad = math.rad(angleDeg)
-                                local verticalOffset = math.tan(angleRad) * dist
-                                local endZ = pz + verticalOffset
-                                local hit = tLine(px, py, pz + 0.6, testX, testY, endZ, 0x100111)
-                                if hit then
-                                    testClear = false
-                                    break
-                                end
-                            end
-                            if testClear then
-                                bestSteerAngle = testAngle
-                                break
-                            end
-                        end
-                    end
-                    break  -- Stop at first blocked distance
+                
+                if clearPathFound then
+                    break -- Stop checking shorter distances, we found a proactive clear path!
                 end
             end
         end
 
+        if not clearPathFound then
+            -- Extreme fallback: if all paths are blocked, just trust the Mover
+            pathBlocked = true
+        end
+
         if pathBlocked and bestSteerAngle ~= 0 then
-            -- Apply steering
+            -- Apply steering proactively using the clear distance we found
             local steerYaw = yaw + bestSteerAngle
-            local steerDist = math.min(dist2D, 5.0)
+            -- Make the steering distance at least 5 yards for smooth movement, or longer if we saw further
+            local steerDist = math.min(dist2D, math.max(5.0, bestSteerDist))
             finalX = px + math.cos(steerYaw) * steerDist
             finalY = py + math.sin(steerYaw) * steerDist
             finalZ = pz + slopeZ * steerDist

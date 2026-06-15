@@ -116,3 +116,5 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **Settings:** Made DisableCR persistent across reloads.
 - **RestHandler:** Enabled eating food/drink from bags and added First Aid bandaging support.
 
+- **Navigation:** Completely rewrote the whisker collision array to use proactive distance brackets (12, 8, 4, 2 yards) so the bot sweeps and steers early when approaching obstacles instead of waiting until it hits them.
+
