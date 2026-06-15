@@ -122,3 +122,7 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 
 - **Navigation/Whiskers:** Fixed a critical terrain bug where downward-angled whiskers (-60 degrees) would constantly hit flat ground, triggering a false-positive 'obstacle detected' state that completely disabled steering. The system now traces two parallel rays at Knee and Chest height that dynamically pitch to match the terrain slope. This allows the bot to fluidly glide up and down hills while only ever steering away from genuine protruding obstacles (walls, trees, fences).
 
+- **Navigation:** Added steering memory so the whiskers prefer sticking to the side they recently chose, completely preventing rapid left-right erratic jittering.
+- **Waypoints:** Fixed an issue where the waypoint engine would incorrectly force itself to step and fight with CombatHandler during combat.
+- **QuestHandler:** The objective scanner now strictly evaluates all possible targets in range and paths to the mathematically closest one instead of the first one it finds in memory, preventing you from ninja pulling distant mobs.
+

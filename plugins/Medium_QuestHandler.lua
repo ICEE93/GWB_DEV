@@ -227,16 +227,14 @@ local function ScanNearbyObjectives()
     -- Cleanup blacklist periodically
     CleanupBlacklist()
 
-    -- If we already have a valid target and it hasn't timed out, verify it
-    if GWB.QuestTarget then
-        if GetTime() > questTargetTimeout then
-            GWB:Debug("QuestTarget timed out.")
-            GWB.QuestTarget = nil
-        elseif not ObjectExists(GWB.QuestTarget) then
-            GWB.QuestTarget = nil
-        else
-            -- We are still pursuing a valid quest target
+    if UnitAffectingCombat("player") then return end
+    if UnitIsDeadOrGhost("player") then return end
 
+    if GWB.QuestTarget then
+        if not ObjectExists(GWB.QuestTarget) or (GetTime() > questTargetTimeout) then
+            GWB.QuestTarget = nil
+            GWB:Debug("Quest Target timed out or disappeared.")
+        else
             -- If it's a game object, check if we are close enough to interact
             if ObjectType(GWB.QuestTarget) == 8 then
                 local px, py, pz = ObjectPosition("player")
@@ -311,99 +309,116 @@ local function ScanNearbyObjectives()
                             end
                         end
                     end
+                else
+                    -- Hostile NPC quest target. CombatHandler will handle movement and combat
+                    if Unlock and TargetUnit then
+                        local oldMouseover = GetMouseover()
+                        SetMouseover(GWB.QuestTarget)
+                        Unlock(TargetUnit, "mouseover")
+                        SetMouseover(oldMouseover)
+                    end
+                    -- Do not move to it here, CombatHandler does that
                 end
             end
             return
         end
     end
 
-    local px, py, pz = ObjectPosition("player")
-    if not px then return end
+    -- If we don't have a QuestTarget, scan for the CLOSEST one
+    if not GWB.QuestTarget then
+        local px, py, pz = ObjectPosition("player")
+        if not px then return end
 
-    -- Check NPCs (5) and GameObjects (8)
-    for _, typeId in ipairs({5, 8}) do
-        local objects = ObjectManager(typeId) or {}
+        local objects = Objects()
+        if not objects then return end
+
+        local bestObj = nil
+        local bestDist = SEARCH_RADIUS + 1
+
         for i = 1, #objects do
             local obj = objects[i]
             if ObjectExists(obj) then
-                local cx, cy, cz = ObjectPosition(obj)
-                if cx then
-                    local dx, dy, dz = cx-px, cy-py, cz-pz
-                    local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                    
-                    if dist <= SEARCH_RADIUS then
-                        -- Check if the unit is dead before trying to engage it as a quest target
-                        local skipObj = false
-                        if typeId == 5 then
-                            local oldMouseover = GetMouseover()
-                            SetMouseover(obj)
-                            if UnitIsDead("mouseover") then
-                                skipObj = true
-                            end
-                            SetMouseover(oldMouseover)
-                        end
-
-                        if not skipObj then
-                            -- Check if NPC is blacklisted
-                            local objGuid = ObjectPointer(obj)
-                            if objGuid and IsNPCBlacklisted(objGuid) then
-                                skipObj = true
+                local typeId = ObjectType(obj)
+                -- 5 = Unit (NPC/Monster), 8 = GameObject (Chests, Gatherables)
+                if typeId == 5 or typeId == 8 then
+                    local cx, cy, cz = ObjectPosition(obj)
+                    if cx then
+                        local dx, dy, dz = cx-px, cy-py, cz-pz
+                        local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                        
+                        if dist < bestDist then
+                            -- Check if the unit is dead
+                            local skipObj = false
+                            if typeId == 5 then
+                                local oldMouseover = GetMouseover()
+                                SetMouseover(obj)
+                                if UnitIsDead("mouseover") then
+                                    skipObj = true
+                                end
+                                SetMouseover(oldMouseover)
                             end
 
                             if not skipObj then
-                                local isQuestObj, questName = GWB.QuestHandler:IsObjective(obj)
-                                if isQuestObj then
-                                    GWB.QuestTarget = obj
-                                    questTargetTimeout = GetTime() + 15 -- Give it 15 seconds to reach/engage
-                                    GWB:Debug("Found Quest Objective:", ObjectName(obj))
+                                -- Check blacklist
+                                local objGuid = ObjectPointer(obj)
+                                if objGuid and IsNPCBlacklisted(objGuid) then
+                                    skipObj = true
+                                end
 
-                                    -- Check if the NPC is friendly or hostile
-                                    local isFriendly = false
-                                    if typeId == 5 then
-                                        local oldMouseover = GetMouseover()
-                                        SetMouseover(obj)
-                                        isFriendly = not UnitCanAttack("player", "mouseover")
-                                        SetMouseover(oldMouseover)
+                                if not skipObj then
+                                    local isQuestObj, questName = GWB.QuestHandler:IsObjective(obj)
+                                    if isQuestObj then
+                                        bestObj = obj
+                                        bestDist = dist
                                     end
-
-                                    -- Tell the mover to approach
-                                    if typeId == 5 then
-                                        if isFriendly then
-                                            -- It's a friendly NPC (quest turn-in/accept), move to it and interact
-                                            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                                                GWB.EZMover:MoveToXYZ(cx, cy, cz)
-                                            else
-                                                GWB.Mover:MoveToXYZ(cx, cy, cz)
-                                            end
-                                        else
-                                            -- It's a hostile NPC, target it so CombatHandler takes over
-                                            if Unlock and TargetUnit then
-                                                local oldMouseover = GetMouseover()
-                                                SetMouseover(obj)
-                                                Unlock(TargetUnit, "mouseover")
-                                                SetMouseover(oldMouseover)
-                                            end
-
-                                            -- Move to it to initiate engagement
-                                            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                                                GWB.EZMover:MoveToXYZ(cx, cy, cz)
-                                            else
-                                                GWB.Mover:MoveToXYZ(cx, cy, cz)
-                                            end
-                                        end
-                                    else
-                                        -- It's a GameObject, walk to it and interact
-                                        if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-                                            GWB.EZMover:MoveToXYZ(cx, cy, cz)
-                                        else
-                                            GWB.Mover:MoveToXYZ(cx, cy, cz)
-                                        end
-                                    end
-                                    return -- Stop scanning once we find one
                                 end
                             end
                         end
                     end
+                end
+            end
+        end
+
+        if bestObj then
+            GWB.QuestTarget = bestObj
+            questTargetTimeout = GetTime() + 15
+            GWB:Debug("Found Closest Quest Objective:", ObjectName(bestObj), "at dist", bestDist)
+
+            -- Check if friendly or hostile
+            local typeId = ObjectType(bestObj)
+            local isFriendly = false
+            if typeId == 5 then
+                local oldMouseover = GetMouseover()
+                SetMouseover(bestObj)
+                isFriendly = not UnitCanAttack("player", "mouseover")
+                SetMouseover(oldMouseover)
+            end
+
+            -- Approach
+            if typeId == 5 then
+                if isFriendly then
+                    local cx, cy, cz = ObjectPosition(bestObj)
+                    if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                        GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                    else
+                        GWB.Mover:MoveToXYZ(cx, cy, cz)
+                    end
+                else
+                    -- Hostile, let CombatHandler handle
+                    if Unlock and TargetUnit then
+                        local oldMouseover = GetMouseover()
+                        SetMouseover(bestObj)
+                        Unlock(TargetUnit, "mouseover")
+                        SetMouseover(oldMouseover)
+                    end
+                end
+            else
+                -- GameObject
+                local cx, cy, cz = ObjectPosition(bestObj)
+                if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                    GWB.EZMover:MoveToXYZ(cx, cy, cz)
+                else
+                    GWB.Mover:MoveToXYZ(cx, cy, cz)
                 end
             end
         end

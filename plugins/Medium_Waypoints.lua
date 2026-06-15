@@ -265,7 +265,7 @@ function _tickTest()
         return
     end
     
-    -- Yield if any other state is active (LootHandler, RestHandler, TownHandler, etc.)
+    -- Yield to other states (LootHandler, RestHandler, TownHandler, etc.)
     if GWB.State and GWB.State:getCurrentState() ~= "plugin.Waypoints" then
         return
     end
@@ -275,12 +275,15 @@ function _tickTest()
         return
     end
 
-    -- make sure we are alive?
-    if UnitIsDead("player") or UnitIsDeadOrGhost("player") then
+    -- make sure we are alive
+    if UnitIsDeadOrGhost("player") then
         return
     end
 
-    if inCombat then return end
+    -- Yield to CombatHandler entirely!
+    if UnitAffectingCombat("player") then
+        return
+    end
 
     -- Yield to QuestHandler if pursuing a quest objective
     if GWB.QuestTarget then return end

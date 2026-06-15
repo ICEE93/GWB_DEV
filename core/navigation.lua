@@ -320,6 +320,17 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         -- Steering angles to test (0 = straight, then progressively wider)
         local steerAngles = {0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1.0, -1.0, 1.25, -1.25, 1.5, -1.5}
         
+        -- Anti-jitter memory: prefer the side we steered towards on the last tick!
+        if GWB.lastSteerAngle and GWB.lastSteerAngle ~= 0 then
+            if GWB.lastSteerAngle > 0 then
+                -- Prefer right turns
+                steerAngles = {0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, -0.25, -0.5, -0.75, -1.0, -1.25, -1.5}
+            else
+                -- Prefer left turns
+                steerAngles = {0, -0.25, -0.5, -0.75, -1.0, -1.25, -1.5, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5}
+            end
+        end
+        
         -- Distance brackets to check (proactive early avoidance)
         local distanceBrackets = { 
             math.min(dist2D, 12.0), 
@@ -408,8 +419,12 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
             finalX = px + math.cos(steerYaw) * steerDist
             finalY = py + math.sin(steerYaw) * steerDist
             finalZ = pz + slopeZ * steerDist
+            
+            -- Save for anti-jitter memory
+            GWB.lastSteerAngle = bestSteerAngle
+        else
+            GWB.lastSteerAngle = 0
         end
-    end
 
     GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
 end
