@@ -425,6 +425,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         else
             GWB.lastSteerAngle = 0
         end
+    end
 
     GWB.EZMover:ClickToMoveSafeZ(finalX, finalY, finalZ)
 end

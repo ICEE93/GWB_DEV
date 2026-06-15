@@ -501,7 +501,37 @@ local function InitializeUI()
     minimapBtn:SetSize(31, 31)
     minimapBtn:SetFrameStrata("MEDIUM")
     minimapBtn:SetFrameLevel(8)
-    minimapBtn:SetPoint("TOPLEFT", Minimap, "TOPLEFT", 0, -20)
+
+    minimapBtn:SetMovable(true)
+    minimapBtn:RegisterForDrag("RightButton")
+
+    minimapBtn:SetScript("OnDragStart", function(self)
+        self:LockHighlight()
+        self:SetScript("OnUpdate", function(self)
+            local mx, my = Minimap:GetCenter()
+            local px, py = GetCursorPosition()
+            local scale = Minimap:GetEffectiveScale()
+            px, py = px / scale, py / scale
+            local angle = math.atan2(py - my, px - mx)
+            
+            if GWB and GWB.Settings then
+                GWB.Settings.MinimapAngle = angle
+            end
+
+            local radius = 80 -- standard minimap radius
+            self:ClearAllPoints()
+            self:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * radius, math.sin(angle) * radius)
+        end)
+    end)
+    
+    minimapBtn:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        self:UnlockHighlight()
+    end)
+
+    -- Initial position
+    local initAngle = (GWB and GWB.Settings and GWB.Settings.MinimapAngle) or math.rad(225)
+    minimapBtn:SetPoint("CENTER", Minimap, "CENTER", math.cos(initAngle) * 80, math.sin(initAngle) * 80)
 
     local icon = minimapBtn:CreateTexture(nil, "BACKGROUND")
     icon:SetTexture("Interface\\Icons\\INV_Misc_Gear_01") -- Gear icon
@@ -535,9 +565,9 @@ local function InitializeUI()
         local recText = isRec and "\n|cffff0000[RECORDING]|r" or ""
         
         if GWB.Map:IsRunning() or (GWB.RoutinePlayback and GWB.RoutinePlayback:IsRunning()) then
-            GameTooltip:SetText("GWB: Running" .. recText .. "\nLeft-Click to Stop\nRight-Click for Settings\nMiddle-Click for Recorder", 0, 1, 0)
+            GameTooltip:SetText("GWB: Running" .. recText .. "\nLeft-Click to Stop\nRight-Click for Settings\nMiddle-Click for Recorder\nRight-Click & Drag to move", 0, 1, 0)
         else
-            GameTooltip:SetText("GWB: Stopped" .. recText .. "\nLeft-Click to Start\nRight-Click for Settings\nMiddle-Click for Recorder", 1, 0, 0)
+            GameTooltip:SetText("GWB: Stopped" .. recText .. "\nLeft-Click to Start\nRight-Click for Settings\nMiddle-Click for Recorder\nRight-Click & Drag to move", 1, 0, 0)
         end
         GameTooltip:Show()
     end)
