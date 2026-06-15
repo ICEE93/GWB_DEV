@@ -364,14 +364,16 @@ function _tickTest()
             if foundTarget then
                 local cx, cy, cz = ObjectPosition(foundTarget)
                 
-                -- Use 2D distance for interactions to avoid Z-axis height issues (e.g. tall NPCs or slightly floating objectives)
+                -- Use 2D distance and Z difference to avoid height issues (e.g. tall NPCs or slightly floating objectives, but respect different floors)
                 local dist2D = 999
+                local zDiff = 999
                 if px and cx then
                     dist2D = math.sqrt((px - cx)^2 + (py - cy)^2)
+                    zDiff = math.abs(pz - cz)
                 end
                 
-                -- Interaction range is usually 5 yards. Using 5.0 to be safe.
-                if dist2D < 5.0 then
+                -- Interaction range is usually 5 yards. Z diff up to 5 yards accommodates huge tall bosses.
+                if dist2D < 5.0 and zDiff < 5.0 then
                     local isCasting = UnitCastingInfo and UnitCastingInfo("player")
                     local isChanneling = UnitChannelInfo and UnitChannelInfo("player")
                     
@@ -415,16 +417,22 @@ function _tickTest()
 
         -- If not interacting, move towards the pin coordinate
         local distToPin2D = Distance(px, py, 0, pin.wx, pin.wy, 0)
+        local pinZDiff = 0
+        if pin.wz and pz then
+            pinZDiff = math.abs(pz - pin.wz)
+        end
+        
         local isQuestInteraction = (pin.type == "complete" or pin.type == "available" or pin.type == "turnin" or pin.type == "accept" or pin.type == "turn in")
         
-        if distToPin2D > 5 then
+        -- Require us to be on the correct floor (Z diff < 5) and X/Y distance < 5
+        if distToPin2D > 5.0 or pinZDiff > 5.0 then
             if GWB.Settings.UseEZNavSafe and GWB.EZMover then
                 GWB.EZMover:MoveToXYZ(pin.wx, pin.wy, pin.wz, isQuestInteraction)
             else
                 GWB.Mover:MoveToXYZ(pin.wx, pin.wy, pin.wz)
             end
         else
-            -- We reached the coordinate but NPC isn't here yet. Blacklist this pin for 120s and move on!
+            -- We reached the coordinate AND correct floor but NPC isn't here yet. Blacklist this pin for 120s and move on!
             if GWB.Settings.UseEZNavSafe and GWB.EZMover then
                 if GWB.EZMover:IsMoving() then GWB.EZMover:Stop() end
             end

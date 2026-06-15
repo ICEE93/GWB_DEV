@@ -118,3 +118,5 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 
 - **Navigation:** Completely rewrote the whisker collision array to use proactive distance brackets (12, 8, 4, 2 yards) so the bot sweeps and steers early when approaching obstacles instead of waiting until it hits them.
 
+- **Waypoints:** Fixed a major issue where the bot would try to interact with NPCs or blackbox Zygor pins through ceilings/floors. It now respects the Z-axis (height) and will continue pathing to the stairs instead of getting stuck below targets on the 2D plane.
+
