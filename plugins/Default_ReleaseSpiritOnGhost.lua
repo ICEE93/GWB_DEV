@@ -150,10 +150,12 @@ local function TickGhostWalk()
         GWB:Print("TickGhostWalk, set CorposePos", cx, cy, cz)
         
         if GWB.Settings.UseEZNavSafe and GWB.EZMover then
-            corpseTargetSet = GWB.EZMover:MoveToXYZ(cx, cy, cz)
+            GWB.EZMover:MoveToXYZ(cx, cy, cz)
         else
-            corpseTargetSet = GWB.Mover:MoveToXYZ(cx, cy, cz)
+            GWB.Mover:MoveToXYZ(cx, cy, cz)
         end
+        
+        corpseTargetSet = true
         lastCorpseUpdate = tick
     else
         local isMoving = false

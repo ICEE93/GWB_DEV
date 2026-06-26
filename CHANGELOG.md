@@ -126,3 +126,8 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **Waypoints:** Fixed an issue where the waypoint engine would incorrectly force itself to step and fight with CombatHandler during combat.
 - **QuestHandler:** The objective scanner now strictly evaluates all possible targets in range and paths to the mathematically closest one instead of the first one it finds in memory, preventing you from ninja pulling distant mobs.
 
+
+- **TownHandler:** Protected common gathering tools (Mining Pick, Skinning Knife, Blacksmith Hammer) from being automatically sold.
+- **TownHandler:** Added explicit protection to prevent the bot from selling Quest Items (classID 12).
+- **ReleaseSpiritOnGhost:** Fixed a ghost-walking bug where the bot would spam path generation and stop moving due to incorrect tracking variable assignments.
+

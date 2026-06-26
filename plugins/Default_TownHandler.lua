@@ -727,11 +727,20 @@ local function ShouldVendor(itemID, quality)
     -- Prevent selling Uncommon (Green) or higher quality items
     if quality >= 2 then return false end
 
+    -- Protect gathering tools
+    local protectedTools = {
+        [2901] = true, -- Mining Pick
+        [7005] = true, -- Skinning Knife
+        [5956] = true, -- Blacksmith Hammer
+    }
+    if protectedTools[itemID] then return false end
+
     -- Prevent selling valuable auction house items
     local itemName, _, _, _, _, _, _, _, _, _, _, classID = GetItemInfo(itemID)
     if classID then
         if classID == 7 then return false end -- Trade Goods (Herbs, Ore, Cloth, Skins, etc.)
         if classID == 9 then return false end -- Recipes
+        if classID == 12 then return false end -- Quest items!
     end
 
     local count = GWB.Inv.currentItems[tostring(itemID)]
