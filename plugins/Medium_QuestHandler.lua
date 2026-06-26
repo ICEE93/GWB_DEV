@@ -346,6 +346,19 @@ local function ScanNearbyObjectives()
                         local dx, dy, dz = cx-px, cy-py, cz-pz
                         local dist = math.sqrt(dx*dx + dy*dy + dz*dz)
                         
+                        -- Avoid underwater objectives by heavily penalizing their distance score
+                        local tLine = TraceLine or (Nn and Nn.TraceLine)
+                        if tLine then
+                            local wX, wY, wZ = tLine(cx, cy, cz + 100.0, cx, cy, cz - 100.0, 0x20000)
+                            if wZ and wZ > cz then
+                                -- Object is submerged. Is the water deep?
+                                local gX, gY, gZ = tLine(wX, wY, wZ, wX, wY, wZ - 50.0, 0x100111)
+                                if not gZ or (wZ - gZ) > 1.2 then
+                                    dist = dist + 50000 -- Make it extremely unattractive
+                                end
+                            end
+                        end
+
                         if dist < bestDist then
                             -- Check if the unit is dead
                             local skipObj = false

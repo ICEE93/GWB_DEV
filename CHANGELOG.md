@@ -144,3 +144,7 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
   - Includes an exhaustive name database for ores and herbs alongside programmatic Tooltip scanning (looking for "Requires Mining" or "Requires Herbalism") to robustly discover new expansion nodes automatically.
   - Restricts the plugin execution explicitly to `classic|retail` environments using the `xpacs` configuration flag.
 
+### Core Systems Updates
+- **Navigation (Water Avoidance):** The Whisker Array now dynamically traces for `Liquid` surfaces (`0x20000`). If deep water (>1.2 yards) is detected in the player's path, the engine treats it as a solid brick wall, seamlessly steering the bot around lakes and deep rivers.
+- **QuestHandler (Water Avoidance):** Quest objective evaluation now projects a vertical ray downward from all potential targets to measure water depth. If an objective is submerged in deep water, it is penalized with a massive distance score (+50000), guaranteeing the bot will prioritize dry targets unless absolutely necessary.
+

@@ -387,6 +387,16 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                             -- Trace ray parallel to the expected terrain slope
                             local hitX, hitY, hitZ = tLine(px, py, startZ, baseX, baseY, endZ, 0x100111)
                             
+                            -- Deep water detection (Liquid = 0x20000)
+                            local wX, wY, wZ = tLine(px, py, startZ, baseX, baseY, endZ, 0x20000)
+                            if wX then
+                                -- Trace straight down from water surface to find ground
+                                local gX, gY, gZ = tLine(wX, wY, wZ, wX, wY, wZ - 50.0, 0x100111)
+                                if not gZ or (wZ - gZ) > 1.2 then
+                                    hitX, hitY, hitZ = wX, wY, wZ -- Treat deep water as a solid obstacle
+                                end
+                            end
+                            
                             -- If the ray hits anything, it means there's an obstacle sticking out of the ground!
                             if hitX then
                                 anyRayBlocked = true
