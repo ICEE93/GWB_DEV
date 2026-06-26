@@ -288,6 +288,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                         end
                     end
                 end
+                end
             end
         end
 
