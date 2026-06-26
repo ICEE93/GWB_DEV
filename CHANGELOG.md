@@ -137,3 +137,10 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **Waypoints:** Resolved a bug where `GWB.Mover.IsMoving` was incorrectly called using dot notation instead of method syntax (`:`).
 - **Warlock (Soulstone):** Addressed a scoping issue where the `CanUseSoulstone` check shadowed the global WoW API function.
 
+### New Features
+- **GatherBot (`Medium_GatherBot.lua`):** Added a new, fully integrated automation plugin to safely path to and gather nearby mining nodes and herbs.
+  - Exposes settings toggles for turning the bot on/off and specifically toggling mining vs. herbalism targets.
+  - Automatically filters tapped nodes via dynamic flags and gracefully yields pathing control back to `CombatHandler` if you are attacked.
+  - Includes an exhaustive name database for ores and herbs alongside programmatic Tooltip scanning (looking for "Requires Mining" or "Requires Herbalism") to robustly discover new expansion nodes automatically.
+  - Restricts the plugin execution explicitly to `classic|retail` environments using the `xpacs` configuration flag.
+
