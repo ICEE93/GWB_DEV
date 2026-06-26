@@ -295,7 +295,7 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     -- TODO: stop resting !!!
     if GWB.State:getCurrentState() == "plugin.RestHandle" then
         print("COMBAT WHILE RESTING, REEEEEEEEE")
-        GWB.State:returnState()
+        GWB.State:callState("plugin.CombatHandler")
     end
     --print("WEEE NEED LEAVE REST HANDLER")
 end

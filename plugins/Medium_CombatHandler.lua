@@ -205,8 +205,8 @@ local function updateFacingTarget()
 end
 
 local function autoTarget()
-    if not Objects or not GetFocus then return end
-    local os = Objects()
+    if not ObjectManager then return end
+    local os = ObjectManager(5) or {}
     local old = GetFocus()
     local isAutopilot = GWB.Settings.QuestieAutopilot or (GWB.Settings and GWB.Settings.AutopilotProvider)
     local function isQuestObjFast(o) return GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o) end
@@ -219,7 +219,7 @@ local function autoTarget()
 
     for i=1, #os do
         local o = os[i]
-        if ObjectType(o) == 5 then
+        if ObjectExists(o) then
             SetFocus(o)
             if not UnitIsDead("focus") and UnitIsEnemy("player", "focus") and UnitCanAttack("player", "focus") then
                 local isAttackingMe = UnitTarget and UnitTarget(o) == Object("player")

@@ -1462,8 +1462,8 @@ plugin.callbacks.OnPlayerEnterCombat = function(ctx)
             return true -- suppress other handlers, keep moving
         end
 
-        print("RETURN FROM TownHandler ???")
-        GWB.State:returnState()
+        print("COMBAT FROM TownHandler ???")
+        GWB.State:callState("plugin.CombatHandler")
     end
 end
 plugin.callbacks.OnPlayerDeath = function(ctx)

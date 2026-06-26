@@ -130,4 +130,10 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 - **TownHandler:** Protected common gathering tools (Mining Pick, Skinning Knife, Blacksmith Hammer) from being automatically sold.
 - **TownHandler:** Added explicit protection to prevent the bot from selling Quest Items (classID 12).
 - **ReleaseSpiritOnGhost:** Fixed a ghost-walking bug where the bot would spam path generation and stop moving due to incorrect tracking variable assignments.
+- **ObjectManager:** Refactored object enumeration across `core` to use the optimized `ObjectManager(type)` instead of generic `Objects()` loops, massively boosting performance.
+- **CombatHandler:** Fixed syntax and scoping issues in targeting logic and improved validation in movement loops.
+- **LootHandler:** Resolved a nasty closure bug involving `C_Timer.After` inside `OnLootStarted` that would throw errors during combat loot checks.
+- **State Machine:** Fixed `TownHandler` and `RestHandler` dropping state incorrectly when interrupted by combat.
+- **Waypoints:** Resolved a bug where `GWB.Mover.IsMoving` was incorrectly called using dot notation instead of method syntax (`:`).
+- **Warlock (Soulstone):** Addressed a scoping issue where the `CanUseSoulstone` check shadowed the global WoW API function.
 

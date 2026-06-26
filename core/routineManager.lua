@@ -134,21 +134,23 @@ local function GetInteractObj()
     local obj = nil
     if Object then
         obj = Object("npc")
-        if not obj or ObjectType(obj) == 0 then
+        if not obj or not ObjectExists(obj) or ObjectType(obj) == 0 then
             obj = Object("target")
         end
-        if not obj or ObjectType(obj) == 0 then
+        if not obj or not ObjectExists(obj) or ObjectType(obj) == 0 then
             obj = Object("mouseover")
         end
     end
+    if obj and not ObjectExists(obj) then return nil end
     return obj
 end
 
 local function GetObjId(obj)
-    if not obj then return 0 end
+    if not obj or not ObjectExists(obj) then return 0 end
     local t = ObjectType(obj)
     if t == 5 then return ObjectUnitId(obj) or 0 end
-    return ObjectId(obj) or 0
+    if t == 8 then return ObjectId(obj) or 0 end
+    return 0
 end
 
 recordCallbacks.OnGossipStart = function()
@@ -250,7 +252,7 @@ recordCallbacks.OnLootStarted = function()
     local isCorpse = false
     if obj then
         if ObjectType(obj) == 10 then isCorpse = true end
-        if UnitIsDead(obj) then isCorpse = true end
+        if ObjectType(obj) == 5 and UnitIsDead(obj) then isCorpse = true end
     end
     
     -- We mainly care about recording interactable objects, not every single dead mob

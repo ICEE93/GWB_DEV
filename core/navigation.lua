@@ -227,7 +227,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         local now = GetTime()
 
         -- Check for aggressive non-quest mobs in path and steer around them
-        local os = Objects()
+        local os = ObjectManager(5) or {}
         local avoidanceVectorX, avoidanceVectorY = 0, 0
         local avoidanceWeight = 0
 
@@ -238,9 +238,10 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
 
         for i = 1, #os do
             local o = os[i]
-            local ox, oy, oz = ObjectPosition(o)
-            if ox then
-                local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+            if ObjectExists(o) then
+                local ox, oy, oz = ObjectPosition(o)
+                if ox then
+                    local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
                 -- Check if mob is within avoidance range and in front of us
                 if odist < avoidanceRange and odist > 0.1 then
                     local toMobX, toMobY = ox - px, oy - py
@@ -265,6 +266,12 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                                 avoidX, avoidY = -toMobNormX, -toMobNormY
                             else
                                 avoidX, avoidY = -toMobNormY, toMobNormX
+                            end
+                            
+                            -- Calculate dot product to see if we're steering TOWARDS the mob, if so reverse it
+                            local steerDot = avoidX * toMobNormX + avoidY * toMobNormY
+                            if steerDot > 0 then
+                                avoidX, avoidY = -avoidX, -avoidY
                             end
                             
                             -- Weight by distance (closer = stronger avoidance)

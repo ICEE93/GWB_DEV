@@ -123,24 +123,22 @@ end
 
 -- auto update facing for current target
 function GWB:AutoTarget()
-    if not Objects or not GetFocus then return end
-    local os = Objects()
-    local old = GetFocus()
+    local os = ObjectManager(5) or {}
     for i=1, #os do
         local o = os[i]
-        if ObjectType(o) == 5 then
-            Nn.SetFocus(o)
-            if focus.alive and focus.enemy and focus.exists and CheckInteractDistance("focus", 1)  then
-                Unlock(TargetUnit, "focus")
-                --print('setting focus', focus.name)
-                Nn.SetFocus(old)
+        if ObjectExists(o) then
+            Nn.SetMouseover(o)
+            if UnitExists("mouseover") and not UnitIsDead("mouseover") and UnitCanAttack("player", "mouseover") and CheckInteractDistance("mouseover", 1) then
+                if Nn and Nn.Unlock then
+                    Nn.Unlock(TargetUnit, "mouseover")
+                else
+                    Unlock(TargetUnit, "mouseover")
+                end
                 GWB:UpdateFacingTarget()
                 return
             end
         end
-
     end
-    Nn.SetFocus(old)
 end
 
 -- find closes object to a given XYZ
@@ -479,20 +477,4 @@ function GWB.Utils:InteractOrApproach(obj, onReachCallback, maxRange)
     return "moving"
 end
 
-function GWB.Utils:InteractOrApproach(obj, callback, maxDist)
-    if not ObjectExists(obj) then return end
-    maxDist = maxDist or 4.5
-    local dist = Distance("player", obj)
-    if dist <= maxDist then
-        callback(obj)
-    else
-        local cx, cy, cz = ObjectPosition(obj)
-        if cx then
-            if GWB.Mover then
-                GWB.Mover:MoveTo(cx, cy, cz)
-            else
-                ClickToMove(cx, cy, cz)
-            end
-        end
-    end
-end
+

@@ -23,7 +23,7 @@ local function CanUseSoulstone()
     end
 
     GWB:Print("OnPlayerDeath test UseSoulstone")
-    if HasSoulstone ~= nil and CanUseSoulstone ~= nil then
+    if _G.HasSoulstone ~= nil and _G.CanUseSoulstone ~= nil then
         -- idk?
     else
         local options = C_DeathInfo.GetSelfResurrectOptions() -- added 7.3.5

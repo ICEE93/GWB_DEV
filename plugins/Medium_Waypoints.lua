@@ -244,7 +244,7 @@ local function DoActiveEngage()
 end
 
 -- force face target
-local function ForceFaceTarget()
+local function ForceFaceTarget(useGlider)
     if not useGlider then
         GWB:UpdateFacingTarget()
     else
@@ -495,7 +495,7 @@ function _tickTest()
         -- force stop it if needed
         if GWB.Settings.UseEZNavSafe and GWB.EZMover:IsMoving() then
             GWB.EZMover:Stop()
-        elseif not GWB.Settings.UseEZNavSafe and GWB.Mover.IsMoving() then
+        elseif not GWB.Settings.UseEZNavSafe and GWB.Mover:IsMoving() then
             GWB.Mover:HaltMovement()
         end
         GWB:Debug("[", shouldTickWaypoints, "] inCombat:", inCombat, "isDedOrGhost:", isDedOrGhost)

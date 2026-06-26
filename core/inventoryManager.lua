@@ -265,7 +265,11 @@ function GWB.Inv:UseHearthstone()
 
     --print(bag, slot)
     if bag ~= nil and slot ~= nil then
-        Unlock(UseContainerItem, bag, slot)
+        if Nn and Nn.Unlock then
+            Nn.Unlock(UseContainerItem, bag, slot)
+        else
+            Unlock(UseContainerItem, bag, slot)
+        end
         return true
     end
     return false
