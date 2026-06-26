@@ -15,9 +15,10 @@ GWB:RegisterTicker(tickerName, GWB.Mover.Tick)
 
 
 local lastStuckCoord = nil
-local stuckCounter = 0
-local MAX_STUCK_COUNT = 50 -- Increased from 20 to 50 for much less aggressive unstuck detection
-local MIN_STUCK_DIST = 0.2 -- Reduced from 0.3 to 0.2 for more lenient stuck detection
+local lastStuckTime = nil
+local MIN_STUCK_DIST = 0.2
+local JUMP_THRESHOLD = 3.0
+local UNSTUCK_THRESHOLD = 5.0
 
 local unstuckX, unstuckY, unstuckZ = 0, 0, 0
 local prevX, prevY, prevZ = 0, 0, 0
@@ -25,7 +26,7 @@ local prevX, prevY, prevZ = 0, 0, 0
 local function ClearStuckTracker()
     -- clear
     lastStuckCoord = nil
-    stuckCounter = 0
+    lastStuckTime = nil
 end
 
 --[["
@@ -191,6 +192,7 @@ local function tickStuckDetection()
     if lastStuckCoord == nil then
         GWB.Mover:Update()
         lastStuckCoord = { GWB.Mover:GetPlayerPosition() }
+        lastStuckTime = GetTime()
         return
     end
 
@@ -204,15 +206,10 @@ local function tickStuckDetection()
         return
     end
 
-    -- we didn't progress enough?
-    if stuckCounter == MAX_STUCK_COUNT-5 then
-        -- try jumping?
-        if Unlock and JumpOrAscendStart then
-            Unlock(JumpOrAscendStart)
-            C_Timer.After(0.5, function() if AscendStop then Unlock(AscendStop) end end)
-        end
-    end
-    if stuckCounter == MAX_STUCK_COUNT-3 then
+    local timeStuck = GetTime() - lastStuckTime
+
+    -- Try jumping after 3 seconds
+    if timeStuck > JUMP_THRESHOLD and timeStuck <= UNSTUCK_THRESHOLD then
         -- Try jumping while moving forward for low obstacles
         if Unlock and JumpOrAscendStart then
             Unlock(JumpOrAscendStart)
@@ -227,8 +224,8 @@ local function tickStuckDetection()
             GWB.Mover:MoveToXYZ(forwardX, forwardY, pz)
         end
     end
-    if stuckCounter > MAX_STUCK_COUNT then
-        stuckCounter = 0 -- so we don't get inf loop
+
+    if timeStuck > UNSTUCK_THRESHOLD then
         --GWB:Debug("UNSTUCKING!!")
         GWB.State:callState("plugin.UnstuckHandler")
         -- we are stuck fr, do unstuck?
@@ -279,8 +276,7 @@ local function tickStuckDetection()
         end)
     end
 
-    stuckCounter = stuckCounter + 1
-    --GWB:Debug("stuckCounter", stuckCounter)
+    -- removed stuckCounter
 end
 
 plugin.handlers.stateTick = function()

@@ -77,8 +77,9 @@ local function tick()
         local handlers = plugin.handlers
         if handlers == nil then
             GWB:Debug("Err, no handlers found on", statePluginName)
+            return
         end
-        local tickFn = plugin.handlers.stateTick
+        local tickFn = handlers.stateTick
         if tickFn == nil then
             GWB:Debug("Err, handlers.stateTick NOT found on", statePluginName, "state!!!")
             return

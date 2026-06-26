@@ -30,6 +30,11 @@ plugin.settings = {
 
 plugin.cb_priority = GWB.enums.cb_priority.LOW
 plugin.callbacks = {}
+plugin.handlers = {
+    stateTick = function()
+        -- GWB.State expects this to exist when popped
+    end
+}
 
 local tickerNameGather = plugin.name .. "_tickGather"
 local targetNode = nil

@@ -372,9 +372,28 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                         {offset = charRadius}
                     }
 
-                    for _, pos in ipairs(positions) do
+                    for posIdx, pos in ipairs(positions) do
                         local baseX = px + fx * testDist - rx * pos.offset
                         local baseY = py + fy * testDist - ry * pos.offset
+                        
+                        -- Cliff and Edge Detection (Slope-based)
+                        local hX, hY, hZ = tLine(baseX, baseY, pz + 10.0, baseX, baseY, pz - 50.0, 0x100111)
+                        if not hZ then
+                            anyRayBlocked = true
+                            break
+                        else
+                            local edgeSlope = (hZ - pz) / testDist
+                            -- Allow slopes between -1.5 (steep drop) and 1.5 (steep climb)
+                            if edgeSlope < -1.5 or edgeSlope > 1.5 then
+                                anyRayBlocked = true
+                                break
+                            end
+                            -- Absolute drop/rise cap
+                            if (hZ - pz) < -8.0 or (hZ - pz) > 8.0 then
+                                anyRayBlocked = true
+                                break
+                            end
+                        end
                         
                         -- Calculate the expected Z height at the destination based on the path's slope
                         local expectedZDrop = slopeZ * testDist

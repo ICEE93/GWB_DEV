@@ -146,5 +146,10 @@ All notable changes to the Generic WoW Bot (GWB) project will be documented in t
 
 ### Core Systems Updates
 - **Navigation (Water Avoidance):** The Whisker Array now dynamically traces for `Liquid` surfaces (`0x20000`). If deep water (>1.2 yards) is detected in the player's path, the engine treats it as a solid brick wall, seamlessly steering the bot around lakes and deep rivers.
+- **Navigation (Cliff & Edge Detection):** The Whisker Array now projects a vertical line downward at every potential forward step. If the ground drops more than 2.5 yards (a cliff/hole) or rises more than 1.5 yards (a steep mountain wall), the engine marks the path as blocked, preventing the bot from falling or getting stuck climbing.
 - **QuestHandler (Water Avoidance):** Quest objective evaluation now projects a vertical ray downward from all potential targets to measure water depth. If an objective is submerged in deep water, it is penalized with a massive distance score (+50000), guaranteeing the bot will prioritize dry targets unless absolutely necessary.
+- **StateManager:** Fixed a crash (`attempt to index field 'handlers'`) that occurred when a plugin state failed to export a `handlers` table.
+
+### Unstuck Updates
+- **Default_UnstuckHandler:** Completely rewrote the stuck detection mechanism. It now uses absolute timestamps (`GetTime()`) instead of counting frame ticks. The bot will now patiently wait 3 seconds before attempting jump maneuvers, and 5 seconds before entering the hard unstuck state, vastly reducing false positives.
 
