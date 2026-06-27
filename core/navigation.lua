@@ -569,6 +569,21 @@ local function EZMoverTick()
             return
         end
         ezPathIndex = ezPathIndex + 1
+        
+        -- Safe NavMesh Lookahead Smoothing
+        if Nn.EZ and Nn.EZ.Nav and Nn.EZ.Nav.Raycast then
+            local mapId = select(8, GetInstanceInfo())
+            local lookahead = math.min(#ezPath, ezPathIndex + 6) -- Look up to 6 nodes ahead
+            for i = lookahead, ezPathIndex + 1, -1 do
+                local futureNode = ezPath[i]
+                -- Test NavMesh line of sight!
+                if Nn.EZ.Nav.Raycast(mapId, px, py, pz, futureNode.x, futureNode.y, futureNode.z) then
+                    ezPathIndex = i
+                    break
+                end
+            end
+        end
+        
         wp = ezPath[ezPathIndex]
 
         -- Check if this is a quest interaction (turn-in/accept)

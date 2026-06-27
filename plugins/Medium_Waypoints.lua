@@ -554,6 +554,29 @@ function _tickTest()
       nextP.jy = (math.random() * 4.0) - 2.0
     end
 
+    -- NavMesh Lookahead Smoothing for Farming Waypoints
+    if not useGlider and Nn.EZ and Nn.EZ.Nav and Nn.EZ.Nav.Raycast then
+        local mapId = select(8, GetInstanceInfo())
+        local lookaheadCount = math.min(#points, 10)
+        for offset = lookaheadCount, 1, -1 do
+            local futureIdx = ((pointIndex - 1 + offset) % #points) + 1
+            if futureIdx ~= pointIndex then
+                local futureP = points[futureIdx]
+                if Distance(px, py, 0, futureP.wx, futureP.wy, 0) < 100 then
+                    local targetZ = futureP.wz or pz
+                    if Nn.EZ.Nav.Raycast(mapId, px, py, pz, futureP.wx, futureP.wy, targetZ) then
+                        if pointIndex ~= futureIdx then
+                            pointIndex = futureIdx
+                            updateMov = true
+                            --GWB:Debug("[Waypoints] NavMesh Smoothed! Skipped to point", pointIndex)
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
+
     -- update mesh if needed???
     if updateMov and #points ~= 0 then 
         local p = points[pointIndex]

@@ -476,6 +476,50 @@ function Nav.GetClosestPolygon(tile, x, y, z)
 end
 
 -- ============================================
+-- NavMesh Raycasting (Safe Line of Sight)
+-- ============================================
+
+-- Safely walks the 3D line from (x1,y1,z1) to (x2,y2,z2) along the NavMesh.
+-- Returns true if the entire line is physically walkable on connected navigation polygons.
+-- Immediately returns false if the line crosses an empty void, a steep cliff, or an unclimbable wall.
+function Nav.Raycast(mapId, x1, y1, z1, x2, y2, z2)
+    local dist2D = math.sqrt((x2-x1)^2 + (y2-y1)^2)
+    if dist2D > 120.0 then return false end -- Do not attempt massive raycasts
+    
+    local stepSize = 1.0 -- check every 1.0 yards
+    local numSteps = math.floor(dist2D / stepSize)
+    if numSteps <= 1 then return true end
+    
+    local dx = (x2 - x1) / numSteps
+    local dy = (y2 - y1) / numSteps
+    local dz = (z2 - z1) / numSteps
+    
+    local lastZ = z1
+    
+    for i = 1, numSteps do
+        local cx = x1 + dx * i
+        local cy = y1 + dy * i
+        local cz = z1 + dz * i
+        
+        local tx, ty = math.floor(32 - cy/Nav.Config.TileSize), math.floor(32 - cx/Nav.Config.TileSize)
+        local tile = Nav.LoadTile(mapId, tx, ty)
+        if not tile then return false end
+        
+        local poly = Nav.GetPolygonAt(tile, cx, cy, cz)
+        if not poly then return false end -- Hit an empty void / unwalkable space
+        
+        -- Enforce smooth height transitions to prevent "stepping" across canyons
+        local polyMidZ = (poly.bmin[3] + poly.bmax[3]) * 0.5
+        if math.abs(polyMidZ - lastZ) > 3.0 then 
+            return false -- Vertical difference is too steep
+        end
+        lastZ = polyMidZ
+    end
+    
+    return true
+end
+
+-- ============================================
 -- Funnel Algorithm (Path Smoothing)
 -- ============================================
 
