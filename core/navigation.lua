@@ -172,6 +172,9 @@ local lastWhiskerAngle = nil
 local lastWhiskerTime = 0
 local lastMovementSpeed = 0
 
+-- When whiskers issue a steer, lock out the normal tick from overriding for a short window
+local steerLockUntil = 0
+
 -- LibDraw rendering for whiskers
 local libDrawRays = {}
 local libDrawInstance = nil
@@ -226,8 +229,12 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         local yaw = math.atan2(dy, dx)
         local now = GetTime()
 
-        -- Check for aggressive non-quest mobs in path and steer around them
-        local os = ObjectManager(5) or {}
+        -- Check for aggressive non-quest mobs and un-targeted GameObjects in path and steer around them
+        local allObjs = {}
+        local units = ObjectManager(5) or {}
+        local gameObjs = ObjectManager(8) or {}
+        for i=1, #units do allObjs[#allObjs+1] = units[i] end
+        for i=1, #gameObjs do allObjs[#allObjs+1] = gameObjs[i] end
         local avoidanceVectorX, avoidanceVectorY = 0, 0
         local avoidanceWeight = 0
 
@@ -236,12 +243,16 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
         local avoidanceStrength = isQuestInteraction and 0.85 or 0.7
         local goalStrength = isQuestInteraction and 0.15 or 0.3
 
-        for i = 1, #os do
-            local o = os[i]
+        for i = 1, #allObjs do
+            local o = allObjs[i]
             if ObjectExists(o) then
                 local ox, oy, oz = ObjectPosition(o)
                 if ox then
                     local odist = math.sqrt((ox-px)^2 + (oy-py)^2 + (oz-pz)^2)
+                    local distToGoal = math.sqrt((ox - finalX)^2 + (oy - finalY)^2 + (oz - finalZ)^2)
+                    
+                    -- Do not steer away from objects that are exactly at our destination!
+                    if distToGoal > 2.0 then
                 -- Check if mob is within avoidance range and in front of us
                 if odist < avoidanceRange and odist > 0.1 then
                     local toMobX, toMobY = ox - px, oy - py
@@ -255,10 +266,18 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                     -- If we are doing a quest turn in/accept, we want to detour around ANY hostile mob
                     if dotProduct > 0.1 or isQuestInteraction then
                         -- Check if mob is aggressive and not a quest objective
-                        local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
-                        local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o)
+                        local oType = ObjectType(o)
+                        local shouldAvoid = false
+                        
+                        if oType == 5 then -- Unit
+                            local isAggressive = UnitCanAttack("player", o) and not UnitIsDeadOrGhost(o)
+                            local isQuestMob = GWB.QuestHandler and GWB.QuestHandler.IsObjective and GWB.QuestHandler:IsObjective(o)
+                            shouldAvoid = isAggressive and not isQuestMob
+                        elseif oType == 8 then -- GameObject
+                            shouldAvoid = true -- Always avoid GameObjects that aren't our goal
+                        end
 
-                        if isAggressive and not isQuestMob then
+                        if shouldAvoid then
                             -- Calculate avoidance vector (perpendicular to direction to mob, or directly away if very close)
                             local avoidX, avoidY
                             if isQuestInteraction and odist < 15.0 then
@@ -286,6 +305,7 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                             avoidanceVectorY = avoidanceVectorY + avoidY * weight
                             avoidanceWeight = avoidanceWeight + weight
                         end
+                    end
                     end
                 end
                 end
@@ -398,8 +418,8 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
                         -- Calculate the expected Z height at the destination based on the path's slope
                         local expectedZDrop = slopeZ * testDist
                         
-                        -- Test Knee Height (0.5) and Chest Height (1.2)
-                        for _, zOffset in ipairs({0.5, 1.2}) do
+                        -- Test Ankle Height (0.2), Knee Height (0.6) and Chest Height (1.2)
+                        for _, zOffset in ipairs({0.2, 0.6, 1.2}) do
                             local startZ = pz + zOffset
                             local endZ = pz + expectedZDrop + zOffset
                             
@@ -459,6 +479,11 @@ local function ClickToMoveWithWhiskers(px, py, pz, wx, wy, wz, isQuestInteractio
             
             -- Save for anti-jitter memory
             GWB.lastSteerAngle = bestSteerAngle
+            
+            -- Lock the steer so next tick doesn't immediately override it
+            -- Larger angle = longer hold (sharper turns need more time to clear the corner)
+            local lockDuration = 0.15 + math.abs(bestSteerAngle) * 0.15
+            steerLockUntil = GetTime() + lockDuration
         else
             GWB.lastSteerAngle = 0
         end
@@ -469,6 +494,9 @@ end
 
 local function EZMoverTick()
     if not GWB.Settings.UseEZNavSafe or not ezPath then return end
+    
+    -- If whiskers issued a steer recently, respect it and don't override with next waypoint command
+    if GetTime() < steerLockUntil then return end
     
     local px, py, pz = ObjectPosition("player")
     if not px then return end
@@ -507,31 +535,27 @@ local function EZMoverTick()
         end
     end
     
-    -- Safe Waypoint Skipping: We only skip waypoints if Line of Sight is clear AND the straight-line distance 
-    -- is nearly identical to the mesh path distance. This prevents us from skipping over holes or cliffs 
-    -- where LoS is clear but walking would be fatal.
+    -- Safe Waypoint Skipping:
+    -- Gate 1: TraceLine geometry LoS must be clear (no trees, walls, buildings blocking).
+    -- Gate 2: Nav.RaycastBodyWidth must confirm the full agent body can walk the NavMesh shortcut.
+    -- Both gates must pass. This prevents skipping over ledges where LoS is clear but the drop is fatal.
     local tLine = TraceLine or (Nn and Nn.TraceLine)
+    local _, _, _, _, _, _, _, mapId = GetInstanceInfo()
+    local NavMesh = Nn and Nn.EZ and Nn.EZ.Nav
     if tLine and ezPathIndex < #ezPath then
         local maxScan = math.min(#ezPath, ezPathIndex + 5)
         for scanIdx = maxScan, ezPathIndex + 1, -1 do
             local scanWp = ezPath[scanIdx]
             
-            -- Calculate straight line 3D distance
-            local straightDist = math.sqrt((scanWp.x - px)^2 + (scanWp.y - py)^2 + (scanWp.z - pz)^2)
-            
-            -- Calculate mesh path distance
-            local meshDist = math.sqrt((ezPath[ezPathIndex].x - px)^2 + (ezPath[ezPathIndex].y - py)^2 + (ezPath[ezPathIndex].z - pz)^2)
-            for i = ezPathIndex, scanIdx - 1 do
-                local p1 = ezPath[i]
-                local p2 = ezPath[i+1]
-                meshDist = meshDist + math.sqrt((p2.x - p1.x)^2 + (p2.y - p1.y)^2 + (p2.z - p1.z)^2)
-            end
-            
-            -- If straight distance is at least 85% of mesh distance, it's roughly a straight, flat path
-            if straightDist > 0 and meshDist > 0 and (straightDist / meshDist) >= 0.85 then
-                -- Double check Line of Sight to be absolutely sure no wall/tree is in the way
-                local hit = tLine(px, py, pz + 1.0, scanWp.x, scanWp.y, scanWp.z + 1.0, 0x100111)
-                if not hit then
+            -- Gate 1: Geometry LoS (wall/tree/rock between player and waypoint?)
+            local geoHit = tLine(px, py, pz + 1.0, scanWp.x, scanWp.y, scanWp.z + 1.0, 0x100111)
+            if not geoHit then
+                -- Gate 2: NavMesh body-width check (are we skipping over a void/cliff?)
+                local navOk = true
+                if NavMesh and NavMesh.RaycastBodyWidth and mapId then
+                    navOk = NavMesh.RaycastBodyWidth(mapId, px, py, pz, scanWp.x, scanWp.y, scanWp.z)
+                end
+                if navOk then
                     ezPathIndex = scanIdx
                     break
                 end
@@ -570,14 +594,15 @@ local function EZMoverTick()
         end
         ezPathIndex = ezPathIndex + 1
         
-        -- Safe NavMesh Lookahead Smoothing
-        if Nn.EZ and Nn.EZ.Nav and Nn.EZ.Nav.Raycast then
+        -- Safe NavMesh Lookahead Smoothing on waypoint advance
+        -- Use body-width raycast so we never skip a corner that's needed for wall clearance
+        if Nn.EZ and Nn.EZ.Nav and Nn.EZ.Nav.RaycastBodyWidth then
             local mapId = select(8, GetInstanceInfo())
             local lookahead = math.min(#ezPath, ezPathIndex + 6) -- Look up to 6 nodes ahead
             for i = lookahead, ezPathIndex + 1, -1 do
                 local futureNode = ezPath[i]
-                -- Test NavMesh line of sight!
-                if Nn.EZ.Nav.Raycast(mapId, px, py, pz, futureNode.x, futureNode.y, futureNode.z) then
+                -- All 3 body-width rays must be clear before we skip ahead
+                if Nn.EZ.Nav.RaycastBodyWidth(mapId, px, py, pz, futureNode.x, futureNode.y, futureNode.z) then
                     ezPathIndex = i
                     break
                 end

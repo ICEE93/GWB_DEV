@@ -70,9 +70,15 @@ function GWB.RoutinePlayback:GetCurrentStep() return steps[stepIndex] end
 function GWB.RoutinePlayback:GetStepIndex() return stepIndex end
 function GWB.RoutinePlayback:GetTotalSteps() return #steps end
 
--- Expose on GWB table
-GWB.RoutinePlayback = {}
--- (methods above are written after definition block below)
+function GWB.RoutinePlayback:LoadAndStart(name, stepsData)
+    steps = stepsData
+    loadedName = name
+    isRunning = true
+    isWaiting = false
+    stepIndex = 1
+    GWB.State:callState("plugin.RoutinePlayback")
+    GWB:Print(string.format("RoutinePlayback: playing '%s' (%d steps)", name, #steps))
+end
 
 -- ---------------------------------------------------------------------------
 -- Utility
@@ -490,37 +496,5 @@ plugin.callbacks.OnPlayerLeaveCombat = function(ctx)
     C_Timer.After(1.5, function() isWaiting = false end)
     return false
 end
-
--- ---------------------------------------------------------------------------
--- Registration
--- ---------------------------------------------------------------------------
-GWB.RoutinePlayback = {
-    Load    = function(self, name) return GWB.Routine:LoadFromDisk(name) end,
-    Start   = function(self) 
-        steps, loadedName = GWB.Routine:LoadFromDisk(loadedName or "")
-        if not steps then return end
-        isRunning = true; isWaiting = false; stepIndex = 1
-        GWB.State:callState("plugin.RoutinePlayback")
-    end,
-    Stop    = function(self)
-        isRunning = false; isWaiting = false
-        gossipPending = nil; questPending = nil
-        if GWB.State:getCurrentState() == "plugin.RoutinePlayback" then
-            GWB.State:returnState()
-        end
-        if GWB.EZMover then GWB.EZMover:Stop() end
-    end,
-    LoadAndStart = function(self, name, stepsData)
-        steps = stepsData
-        loadedName = name
-        isRunning = true; isWaiting = false; stepIndex = 1
-        GWB.State:callState("plugin.RoutinePlayback")
-        GWB:Print(string.format("RoutinePlayback: playing '%s' (%d steps)", name, #steps))
-    end,
-    IsRunning = function(self) return isRunning end,
-    GetStepIndex = function(self) return stepIndex end,
-    GetTotalSteps = function(self) return #steps end,
-    GetCurrentStep = function(self) return steps[stepIndex] end,
-}
 
 GWB:RegisterPlugin(plugin)

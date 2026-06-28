@@ -19,6 +19,23 @@ plugin.callbacks = {}
 local function tickPostCombat()
     local timeoutSeconds = plugin.settings.cb_post_timeout and plugin.settings.cb_post_timeout.value or 5
 
+    -- Yield to combat!
+    if UnitAffectingCombat("player") then
+        GWB:Debug("tickPostCombat interrupted by combat!")
+        lastLootingCorpse = nil
+        GWB:TickerSetState(tickerNamePostCombat, false)
+        GWB.isPostCombatLooting = false
+        if previousCtx then
+            local ctx = previousCtx
+            previousCtx = nil
+            if GWB.State:getCurrentState() == "plugin.LootHandler" then
+                GWB.State:returnState()
+            end
+            ctx.continue()
+        end
+        return
+    end
+
     -- Keep target clear during looting so waypoint ticker doesn't fight us
     if UnitExists("target") and not UnitIsDead("target") and UnitCanAttack("player", "target") then
         if Nn.Unlock and RunMacroText then

@@ -111,8 +111,11 @@ function GWB.OM.FindPartyMembersPos()
     local pos = {}
     for i=1, 5 do
         local x, y, z = ObjectPosition("party" ..  tostring(i))
-        table.insert(pos, {x=x, y=y, z=z})
+        if x then
+            table.insert(pos, {x=x, y=y, z=z})
+        end
     end
+    return pos
 end
 
 function GWB.OM.FindTappedEnemiesPos()

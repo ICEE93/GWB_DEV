@@ -18,7 +18,7 @@ local pendingCtx = nil
 
 -- return true if we can Repop with Soulstone
 local function CanUseSoulstone()
-    if not select(2, UnitClass("player")) == "WARLOCK" then
+    if select(2, UnitClass("player")) ~= "WARLOCK" then
         return false -- we are not a warlock
     end
 

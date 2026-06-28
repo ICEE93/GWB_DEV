@@ -190,9 +190,16 @@ local function tickGather()
 
         if dist > plugin.settings.interact_range.value then
             -- Move to node
-            if not GWB.EZMover:IsMoving() or not isGathering then
-                GWB.EZMover:MoveToXYZ(tx, ty, tz)
-                isGathering = true
+            if GWB.Settings.UseEZNavSafe and GWB.EZMover then
+                if not GWB.EZMover:IsMoving() or not isGathering then
+                    GWB.EZMover:MoveToXYZ(tx, ty, tz)
+                    isGathering = true
+                end
+            else
+                if not GWB.Mover:IsMoving() or not isGathering then
+                    GWB.Mover:MoveToXYZ(tx, ty, tz)
+                    isGathering = true
+                end
             end
         else
             -- We are in range, stop moving and interact

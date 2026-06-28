@@ -279,10 +279,7 @@ end
 local function FindNearbyGoodsNPC()
     return FindNearbyVendorNPC("goods")
 end
-local function FindNearbyVendorNPC()
-    -- check repair and/or goods?
-    return FindNearbyVendorNPC("repair")
-end
+
 local function FindNearbyClassTrainerNPC()
     local mapId = C_Map.GetBestMapForUnit("player")
     return GetNearbyClassTrainer(mapId)
@@ -627,7 +624,7 @@ local function IsGoodsFinished()
     if missingFood < 0 then missingFood = 0 end
     local missingDrink = DESIRED_DRINK - drinkCount
     if missingDrink < 0 then missingDrink = 0 end
-    local totalMissing = missingFood - missingDrink
+    local totalMissing = missingFood + missingDrink
     
     -- TODO: calc food tier prices??
     if not CanAffordConsumables() then 

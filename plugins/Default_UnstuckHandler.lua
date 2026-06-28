@@ -17,8 +17,8 @@ GWB:RegisterTicker(tickerName, GWB.Mover.Tick)
 local lastStuckCoord = nil
 local lastStuckTime = nil
 local MIN_STUCK_DIST = 0.2
-local JUMP_THRESHOLD = 3.0
-local UNSTUCK_THRESHOLD = 5.0
+local JUMP_THRESHOLD = 1.5
+local UNSTUCK_THRESHOLD = 2.5
 
 local unstuckX, unstuckY, unstuckZ = 0, 0, 0
 local prevX, prevY, prevZ = 0, 0, 0
@@ -233,7 +233,7 @@ local function tickStuckDetection()
         GWB.Mover:Stop()
 
         -- Simplified unstuck: only try forward movement, no backward/strafing
-        local unstuckX, unstuckY, unstuckZ = coords[1], coords[2], coords[3]
+        unstuckX, unstuckY, unstuckZ = coords[1], coords[2], coords[3]
 
         -- Unstuck: We respect the user's wish to generally move forward toward the target,
         -- but we MUST apply an angle offset so we actually walk AROUND the obstacle (like a tree).

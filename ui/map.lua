@@ -496,6 +496,43 @@ local function InitializeUI()
     btnRecorder:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
     btnRecorder:SetFrameLevel(10)
 
+    local btnSave = CreateMapButton("GWBSaveButton", "Save", 10, -105, function()
+        local points = pointsPerMap[currentMapID]
+        if not points or #points == 0 then
+            print("GWB: No points to save on this map.")
+            return
+        end
+        
+        if not GWB.Routine or not GWB.Routine.SaveToDisk then
+            print("GWB: Routine manager not loaded, cannot save.")
+            return
+        end
+        
+        -- Convert map points {wx, wy, wz} into Routine steps {type="waypoint", x, y, z}
+        local routineSteps = {}
+        for i, p in ipairs(points) do
+            table.insert(routineSteps, {
+                type = "waypoint",
+                x = p.wx,
+                y = p.wy,
+                z = p.wz or 0,
+            })
+        end
+        
+        -- Default name for map exports
+        local mapName = C_Map.GetMapInfo(currentMapID) and C_Map.GetMapInfo(currentMapID).name or "UnknownMap"
+        local profileName = string.format("MapExport_%s_%s", mapName:gsub("%s+", ""), date("%m%d_%H%M"))
+        
+        GWB.Routine:SaveToDisk(profileName, routineSteps)
+    end)
+    btnSave:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Save clicked points as a Routine profile", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    btnSave:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
+    btnSave:SetFrameLevel(10)
+
     -- Create Minimap Button
     local minimapBtn = CreateFrame("Button", "GWBMinimapButton", Minimap)
     minimapBtn:SetSize(31, 31)
@@ -503,7 +540,7 @@ local function InitializeUI()
     minimapBtn:SetFrameLevel(8)
 
     minimapBtn:SetMovable(true)
-    minimapBtn:RegisterForDrag("RightButton")
+    minimapBtn:RegisterForDrag("LeftButton", "RightButton")
 
     minimapBtn:SetScript("OnDragStart", function(self)
         self:LockHighlight()

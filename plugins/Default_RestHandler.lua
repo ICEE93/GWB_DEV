@@ -111,6 +111,25 @@ local function ConsumeBestDrinkIfPossible()
 end
 
 local RECENTLY_BANDAGED_SPELL_ID = 11196
+local EATING_SPELL_ID   = 433 -- "Food"
+local DRINKING_SPELL_ID = 430 -- "Drink"
+
+local function HasAuraByID(spellID)
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        return C_UnitAuras.GetPlayerAuraBySpellID(spellID) ~= nil
+    else
+        return GetPlayerAuraBySpellID(spellID) ~= nil
+    end
+end
+
+local function IsPlayerEating()
+    return HasAuraByID(EATING_SPELL_ID)
+end
+
+local function IsPlayerDrinking()
+    return HasAuraByID(DRINKING_SPELL_ID)
+end
+
 local function FindUsableBandage()
     local BANDAGE_IDS = { 14530, 2581, 1251, 6451, 6450, 3531, 3530, 8545, 8544 } -- Standard classic bandages
     for bag = 0, 4 do
@@ -120,8 +139,8 @@ local function FindUsableBandage()
             if itemId then
                 for _, bId in ipairs(BANDAGE_IDS) do
                     if itemId == bId then
-                        local getCooldown = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
-                        local start, duration = getCooldown(itemId)
+                        local getCooldown = (C_Container and C_Container.GetContainerItemCooldown) or GetContainerItemCooldown
+                        local start, duration = getCooldown(bag, slot)
                         if start == 0 or (start + duration - GetTime() <= 0) then
                             return itemId, bag, slot
                         end
@@ -151,26 +170,6 @@ local function ConsumeBestBandageIfPossible()
     Unlock(RunBinding, cmd, "up")
     return true
 end
-
-local EATING_SPELL_ID   = 433 -- "Food"
-local DRINKING_SPELL_ID = 430 -- "Drink"
-
-local function HasAuraByID(spellID)
-    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        return C_UnitAuras.GetPlayerAuraBySpellID(spellID) ~= nil
-    else
-        return GetPlayerAuraBySpellID(spellID) ~= nil
-    end
-end
-
-local function IsPlayerEating()
-    return HasAuraByID(EATING_SPELL_ID)
-end
-
-local function IsPlayerDrinking()
-    return HasAuraByID(DRINKING_SPELL_ID)
-end
-
 
 plugin.handlers.NeedResting = function()
     -- no resting mid combat
@@ -293,14 +292,14 @@ end
 
 plugin.callbacks.OnPlayerEnterCombat = function(ctx)
     -- TODO: stop resting !!!
-    if GWB.State:getCurrentState() == "plugin.RestHandle" then
+    if GWB.State:getCurrentState() == "plugin.RestHandler" then
         print("COMBAT WHILE RESTING, REEEEEEEEE")
         GWB.State:callState("plugin.CombatHandler")
     end
     --print("WEEE NEED LEAVE REST HANDLER")
 end
 plugin.callbacks.OnPlayerDeath = function(ctx)
-    if GWB.State:getCurrentState() == "plugin.RestHandle" then
+    if GWB.State:getCurrentState() == "plugin.RestHandler" then
         print("LEAVING TEST HANDLER ")
         GWB.State:returnState()
     end

@@ -3,6 +3,11 @@
 All notable changes to the Generic WoW Bot (GWB) project will be documented in this file.
 
 ## [Unreleased]
+- **Navigation:** Added a persistence lock (`steerLockUntil`) to the Whisker system. Whisker steering commands now hold for ~0.2-0.4s (based on angle severity), preventing the 10Hz tick engine from immediately overriding the steer and causing wall-hugging oscillation.
+- **Navigation:** Replaced the 0-thickness path smoothing raycasts with a new `Nav.RaycastBodyWidth` implementation (center, +0.4yd left, -0.4yd right) in both `EZNavSafe.lua` and `navigation.lua`. Waypoints are only skipped if the entire width of the agent clears the geometry.
+- **Navigation:** Added GameObjects (Type 8) to the whisker avoidance logic, stopping the bot from walking straight into large nodes, mailboxes, and chests.
+- **UnstuckHandler:** Lowered the unstuck thresholds. The bot now begins jumping after 1.5s of no movement (down from 3.0s), and initiates extreme unstuck maneuvers at 2.5s (down from 5.0s).
+- **UI (Map):** Added a "Save" button to the World Map frame. Shift+Click drawn paths can now be exported directly to disk as reusable `Routine` JSON profiles.
 - **Navigation:** Restored the whisker-based dynamic steering (`ClickToMoveWithWhiskers`), but resolved conflicts by forcefully pausing whiskers while the `UnstuckHandler` is active. Increased the whisker fallback distance from 2.5 to 5.0 yards to prevent false stuck triggers caused by micro-stuttering.
 - **Core:** Added automatic `LoadSettings` invocation via `init.lua` to ensure Autopilot toggle correctly synchronizes from saved settings without opening the UI manually.
 - **QuestHandler:** Normalized internal Questie active objectives (`"monster"`, `"object"`, etc.) to `"active"`, ensuring Autopilot correctly assigns them navigation priority instead of ignoring them.

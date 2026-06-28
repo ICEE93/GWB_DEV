@@ -13,8 +13,9 @@ local insert = table.insert
 local unpack = unpack or table.unpack
 
 local loadedTiles = {}
+local isGenerating = false
+local lastPathGenTime = 0
 local mapHeaders = {}
-local activeSearch = nil
 local remove = table.remove
 local useBigEndian = false
 
@@ -407,7 +408,7 @@ function Nav.GetPolygonAt(tile, x, y, z)
     end
 
     local bestPoly = nil
-    local minDistZ = 20  -- vertical tolerance in yards
+    local minDistZ = 4.5  -- Strict vertical tolerance in yards to prevent snapping to ceilings/caves
 
     for i = 0, tile.header.polyCount - 1 do
         local p = tile.polys[i]
@@ -456,10 +457,9 @@ function Nav.GetClosestPolygon(tile, x, y, z)
             local dy = cy - y
             local dz = cz - z
             
-            -- Heavily favor 2D distance, but keep Z as a tie-breaker for multi-level terrain
-            -- This allows finding polygons on top of mountains even if Z is off by 500+ yards.
+            -- Heavily punish Z-distance to prevent snapping to caves/bridges directly above or below
             local dist2D = math.sqrt(dx*dx + dy*dy)
-            local dist = dist2D + (math.abs(dz) * 0.01)
+            local dist = dist2D + (math.abs(dz) * 2.5)
             
             if dist < minDist then
                 minDist = dist
@@ -485,10 +485,10 @@ end
 function Nav.Raycast(mapId, x1, y1, z1, x2, y2, z2)
     local dist2D = math.sqrt((x2-x1)^2 + (y2-y1)^2)
     if dist2D > 120.0 then return false end -- Do not attempt massive raycasts
+    if dist2D < 0.01 then return true end
     
-    local stepSize = 1.0 -- check every 1.0 yards
-    local numSteps = math.floor(dist2D / stepSize)
-    if numSteps <= 1 then return true end
+    local stepSize = 0.75 -- check every 0.75 yards for finer granularity
+    local numSteps = math.max(1, math.floor(dist2D / stepSize))
     
     local dx = (x2 - x1) / numSteps
     local dy = (y2 - y1) / numSteps
@@ -516,6 +516,41 @@ function Nav.Raycast(mapId, x1, y1, z1, x2, y2, z2)
         lastZ = polyMidZ
     end
     
+    return true
+end
+
+-- Body-Width Raycast: simulates the agent's physical body by casting 3 parallel
+-- lines (center + left shoulder + right shoulder, each 0.4 yards apart).
+-- A shortcut is ONLY accepted if all three lines pass through the NavMesh cleanly.
+-- This preserves the Funnel's safety buffer — if any shoulder scrapes a wall
+-- the skip is rejected and the padded corner waypoint is preserved.
+function Nav.RaycastBodyWidth(mapId, x1, y1, z1, x2, y2, z2)
+    local dx = x2 - x1
+    local dy = y2 - y1
+    local dist2D = math.sqrt(dx*dx + dy*dy)
+    if dist2D < 0.01 then return true end
+
+    -- Perpendicular direction (normalized) for lateral offsets
+    local perpX =  dy / dist2D
+    local perpY = -dx / dist2D
+    local BODY_HALF = 0.4 -- half the agent radius to test (yards)
+
+    -- All 3 rays must pass: center, left shoulder, right shoulder
+    if not Nav.Raycast(mapId, x1, y1, z1, x2, y2, z2) then
+        return false
+    end
+    if not Nav.Raycast(
+            mapId,
+            x1 + perpX * BODY_HALF, y1 + perpY * BODY_HALF, z1,
+            x2 + perpX * BODY_HALF, y2 + perpY * BODY_HALF, z2) then
+        return false
+    end
+    if not Nav.Raycast(
+            mapId,
+            x1 - perpX * BODY_HALF, y1 - perpY * BODY_HALF, z1,
+            x2 - perpX * BODY_HALF, y2 - perpY * BODY_HALF, z2) then
+        return false
+    end
     return true
 end
 
@@ -603,7 +638,11 @@ function Nav.Funnel(pathPolys, startPos, endPos, tile)
     local lastAnchoredIndex = 1
     
     local i = 2
+    local funnelMaxIter = #portals * 3
+    local funnelIter = 0
     while i <= #portals do
+        funnelIter = funnelIter + 1
+        if funnelIter > funnelMaxIter then break end
         local left = portals[i].left
         local right = portals[i].right
         
@@ -777,8 +816,13 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
         local closestH = fScore[startIdx]
         
         local iterations = 0
+        local MAX_ITERATIONS = 50000
         while next(openSet) do
             iterations = iterations + 1
+            if iterations > MAX_ITERATIONS then
+                GWB:Debug("[EZNavSafe] A* search exceeded max iterations. Falling back to partial path.")
+                break
+            end
             if iterations % 20 == 0 then
                 checkYield()
             end
@@ -803,6 +847,35 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
                 end
                 
                 local smoothPath = Nav.Funnel(corridor, {x=x1, y=y1, z=z1}, {x=x2, y=y2, z=z2}, current.tile)
+                
+                -- Body-Width Raycast Smoothing Pass.
+                -- We try to skip redundant intermediate waypoints, but ONLY accept a skip
+                -- when Nav.RaycastBodyWidth confirms the agent's full body (center + both shoulders)
+                -- can travel the shortcut without any part touching a wall or void.
+                -- This preserves the Funnel's 1.25-yard wall buffer while removing zigzag points.
+                if #smoothPath > 2 then
+                    local finalPath = {}
+                    insert(finalPath, smoothPath[1])
+                    local idx = 1
+                    local maxIter = 0
+                    while idx < #smoothPath and maxIter < 500 do
+                        maxIter = maxIter + 1
+                        -- Scan furthest skippable point first (greedy)
+                        local furthest = idx + 1
+                        for j = math.min(#smoothPath, idx + 8), idx + 2, -1 do
+                            local from = smoothPath[idx]
+                            local to   = smoothPath[j]
+                            if Nav.RaycastBodyWidth(mapId, from.x, from.y, from.z, to.x, to.y, to.z) then
+                                furthest = j
+                                break
+                            end
+                        end
+                        insert(finalPath, smoothPath[furthest])
+                        idx = furthest
+                    end
+                    smoothPath = finalPath
+                end
+                
                 dbgPrint(string.format("[EZNavSafe] A* Success! Path has %d waypoints.", #smoothPath))
                 return callback(smoothPath)
             end
@@ -853,6 +926,14 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
                         
                         local baseCost = heuristic(c1, c2)
                         
+                        -- Penalize vertical drops and steep climbs to prioritize ramps
+                        local dz = c2[3] - c1[3]
+                        if math.abs(dz) > 1.5 then
+                            -- Add 50 yards of distance penalty per yard of vertical difference
+                            -- This ensures a 100 yard ramp is preferred over a 5 yard drop.
+                            baseCost = baseCost + (math.abs(dz) * 50.0)
+                        end
+                        
                         -- Apply Area / Flag specific weight penalties
                         if neighborPoly.area == 9 or (neighborPoly.flags and bit.band(neighborPoly.flags, 4) ~= 0) then
                             baseCost = baseCost * 5.0 -- 5x penalty to avoid swimming
@@ -897,6 +978,30 @@ function Nav.GeneratePath(x1, y1, z1, x2, y2, z2, callback)
             end
             
             local smoothPath = Nav.Funnel(corridor, {x=x1, y=y1, z=z1}, {x=lx, y=ly, z=lz}, startTile)
+            
+            -- Body-Width Raycast Smoothing Pass (same as A* path above)
+            if #smoothPath > 2 then
+                local finalPath = {}
+                insert(finalPath, smoothPath[1])
+                local idx = 1
+                local maxIter = 0
+                while idx < #smoothPath and maxIter < 500 do
+                    maxIter = maxIter + 1
+                    local furthest = idx + 1
+                    for j = math.min(#smoothPath, idx + 8), idx + 2, -1 do
+                        local from = smoothPath[idx]
+                        local to   = smoothPath[j]
+                        if Nav.RaycastBodyWidth(mapId, from.x, from.y, from.z, to.x, to.y, to.z) then
+                            furthest = j
+                            break
+                        end
+                    end
+                    insert(finalPath, smoothPath[furthest])
+                    idx = furthest
+                end
+                smoothPath = finalPath
+            end
+            
             dbgPrint(string.format("[EZNavSafe] Fallback path has %d waypoints to (%.1f, %.1f, %.1f)", #smoothPath, lx, ly, lz))
             return callback(smoothPath)
         end

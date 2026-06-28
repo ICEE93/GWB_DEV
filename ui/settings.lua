@@ -21,8 +21,10 @@ if GWB.Settings.DisableCR == nil then
     GWB.Settings.DisableCR = false
 end
 
+GWB.Settings.ActiveTab = GWB.Settings.ActiveTab or "Core"
+
 local configFrame = CreateFrame("Frame", "GWBConfigFrame", UIParent, "BasicFrameTemplateWithInset")
-configFrame:SetSize(480, 500)
+configFrame:SetSize(620, 500)
 configFrame:SetPoint("CENTER")
 configFrame:Hide()
 configFrame:SetMovable(true)
@@ -100,8 +102,16 @@ function GWB:LoadSettings()
     end
 end
 
+local tabScrollFrame = CreateFrame("ScrollFrame", "GWBConfigTabScroll", configFrame, "UIPanelScrollFrameTemplate")
+tabScrollFrame:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 10, -30)
+tabScrollFrame:SetPoint("BOTTOMRIGHT", configFrame, "BOTTOMLEFT", 140, 10)
+
+local tabScrollChild = CreateFrame("Frame", "GWBConfigTabChild", tabScrollFrame)
+tabScrollChild:SetSize(130, 460)
+tabScrollFrame:SetScrollChild(tabScrollChild)
+
 local scrollFrame = CreateFrame("ScrollFrame", "GWBConfigScrollFrame", configFrame, "UIPanelScrollFrameTemplate")
-scrollFrame:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 10, -30)
+scrollFrame:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 160, -30)
 scrollFrame:SetPoint("BOTTOMRIGHT", configFrame, "BOTTOMRIGHT", -30, 10)
 
 local scrollChild = CreateFrame("Frame", "GWBConfigScrollChild", scrollFrame)
@@ -116,7 +126,11 @@ function GWB:RebuildConfigUI()
         child:Hide()
         child:SetParent(nil)
     end
-    -- also clear font strings
+    local tabChildren = {tabScrollChild:GetChildren()}
+    for _, child in ipairs(tabChildren) do
+        child:Hide()
+        child:SetParent(nil)
+    end
     local regions = {scrollChild:GetRegions()}
     for _, region in ipairs(regions) do
         if region:GetObjectType() == "FontString" then
@@ -125,13 +139,41 @@ function GWB:RebuildConfigUI()
         end
     end
 
+    -- 1. BUILD TABS
+    local tabY = -5
+    local function createTabBtn(label, tabId)
+        local btn = CreateFrame("Button", nil, tabScrollChild, "UIPanelButtonTemplate")
+        btn:SetSize(120, 25)
+        btn:SetPoint("TOPLEFT", 5, tabY)
+        btn:SetText(label)
+        if GWB.Settings.ActiveTab == tabId then
+            btn:LockHighlight()
+        else
+            btn:UnlockHighlight()
+        end
+        btn:SetScript("OnClick", function()
+            GWB.Settings.ActiveTab = tabId
+            GWB:RebuildConfigUI()
+        end)
+        tabY = tabY - 30
+    end
+    
+    createTabBtn("Core Engine", "Core")
+    for pluginName, plugin in pairs(GWB.plugins) do
+        if plugin.settings then
+            createTabBtn(plugin.name or pluginName, pluginName)
+        end
+    end
+    tabScrollChild:SetHeight(math.abs(tabY))
+
+    -- 2. BUILD CONTENT
     local yOffset = -10
 
-    -- Core Settings First
-    local header = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 10, yOffset)
-    header:SetText("Core Engine")
-    yOffset = yOffset - 25
+    if GWB.Settings.ActiveTab == "Core" then
+        local header = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        header:SetPoint("TOPLEFT", 10, yOffset)
+        header:SetText("Core Engine")
+        yOffset = yOffset - 25
 
     local cb = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
@@ -207,7 +249,7 @@ function GWB:RebuildConfigUI()
     provText:SetPoint("TOPLEFT", 25, yOffset - 3)
     provText:SetText("Autopilot Provider")
 
-    local provDropdown = CreateFrame("Frame", "GWBProviderDD", scrollChild, "UIDropDownMenuTemplate")
+    local provDropdown = CreateFrame("Frame", nil, scrollChild, "UIDropDownMenuTemplate")
     provDropdown:SetPoint("TOPLEFT", 200, yOffset + 5)
     UIDropDownMenu_SetWidth(provDropdown, 120)
     UIDropDownMenu_SetText(provDropdown, tostring(GWB.Settings.AutopilotProvider or "Questie"))
@@ -257,7 +299,7 @@ function GWB:RebuildConfigUI()
         print("GWB: Loaded profile: " .. (txt == "" and UnitName("player") or txt))
     end)
     
-    local profDropdown = CreateFrame("Frame", "GWBProfDD", scrollChild, "UIDropDownMenuTemplate")
+    local profDropdown = CreateFrame("Frame", nil, scrollChild, "UIDropDownMenuTemplate")
     profDropdown:SetPoint("LEFT", profEb, "RIGHT", -15, -2)
     UIDropDownMenu_SetWidth(profDropdown, 120)
     UIDropDownMenu_SetText(profDropdown, "Select Profile...")
@@ -304,9 +346,11 @@ function GWB:RebuildConfigUI()
 
     yOffset = yOffset - 30
 
-    -- Plugin Settings
-    for pluginName, plugin in pairs(GWB.plugins) do
-        if plugin.settings then
+    elseif GWB.Settings.ActiveTab ~= "Core" then
+        -- Plugin Settings
+        local pluginName = GWB.Settings.ActiveTab
+        local plugin = GWB.plugins[pluginName]
+        if plugin and plugin.settings then
             local pHeader = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
             pHeader:SetPoint("TOPLEFT", 10, yOffset)
             pHeader:SetText(plugin.name or pluginName)
@@ -354,6 +398,10 @@ function GWB:RebuildConfigUI()
                 end
             end
             yOffset = yOffset - 10
+        else
+            -- Fallback if plugin deleted
+            GWB.Settings.ActiveTab = "Core"
+            C_Timer.After(0.01, function() GWB:RebuildConfigUI() end)
         end
     end
 

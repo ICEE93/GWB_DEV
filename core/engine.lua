@@ -81,7 +81,6 @@ function GWB:FireCallback(cbName, ...)
 end]]
 function GWB:FireCallback(cbName, ...)
     local plugins = GetPluginsSorted()
-    _G.dplugs = plugins
 
     local i = 1
     local args = {...}
@@ -309,14 +308,14 @@ GWB.Spells = {}
 
 function GWB.Spells:TryCastSpell(spell, unit, cb_ok, cb_err)
     local unit = unit or "target"
-    if type(spell) == "name" then
+    if type(spell) == "string" then
         Unlock(CastSpellByName, spell, unit)
     elseif type(spell) == "number" then
         Unlock(CastSpellByID, spell, unit)
     end
 
     -- always assume it is OK?
-    cb_ok(); -- TODO: register more events ??
+    if cb_ok then cb_ok() end -- TODO: register more events ??
 end
 
 

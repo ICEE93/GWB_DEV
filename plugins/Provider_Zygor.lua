@@ -99,6 +99,7 @@ function ZygorProvider.GetNextWaypoint()
             end
 
             -- Use current alternative coordinate (Do not modify wp directly to avoid corrupting Zygor's internal state)
+            local wp_local_x, wp_local_y, wp_local_m = nil, nil, nil
             local altCoord = altCoordsList[altCoordsIndex]
             if altCoord then
                 if debugZ then GWB:Print("[Zygor Debug] Using alternative coordinate", altCoordsIndex, "of", #altCoordsList) end

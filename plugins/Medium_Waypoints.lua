@@ -522,6 +522,7 @@ function _tickTest()
     end
     if not px then return end
     
+    if pointIndex > #points then pointIndex = 1 end
     local p = points[pointIndex]
 
     -- take next Waypoint?

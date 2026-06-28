@@ -114,7 +114,7 @@ plugin.callbacks.OnPlayerDeath = function(ctx)
         GWB.State:returnState()
     end
 
-    ctx.continue() 
+    if ctx then ctx.continue() end 
 end
 
 -- Combat ticker for movement/facing
@@ -323,7 +323,7 @@ local function tickMovement()
     local min = plugin.settings.cb_range_min.value
     local max = plugin.settings.cb_range_max.value
     --print(d, ">", max, "or ", d, "<", min)
-    if d > max or d < min and d < 100 then
+    if (d > max) or (d < min) then
         -- only block if it was more then 3 sec ago
         if GetTime() > updateLastFacing +3 then
             if GWB.Settings.UseEZNavSafe then
